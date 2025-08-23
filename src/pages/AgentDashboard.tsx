@@ -97,7 +97,7 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
       const claimExpiration = new Date();
       claimExpiration.setHours(claimExpiration.getHours() + 2);
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('disclosure_bounties')
         .update({
           status: 'claimed',
@@ -105,14 +105,19 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
           // In real app, would set claimed_by_agent_id to current agent
         })
         .eq('id', bountyId)
-        .eq('status', 'open'); // Ensure it's still open
+        .eq('status', 'open') // Ensure it's still open
+        .select(); // Return the updated data to verify
 
       if (error) {
         console.error('Error claiming bounty:', error);
         throw error;
       }
 
-      console.log('Bounty claimed successfully');
+      if (!data || data.length === 0) {
+        throw new Error('Bounty may have already been claimed by another agent');
+      }
+
+      console.log('Bounty claimed successfully:', data[0]);
 
       toast({
         title: "Bounty Claimed!",
@@ -121,11 +126,11 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
 
       // Navigate to upload page while maintaining login state
       window.location.href = `/upload/${bountyId}`;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error claiming bounty:', error);
       toast({
         title: "Error",
-        description: "Failed to claim bounty. It may have been claimed by another agent.",
+        description: error.message || "Failed to claim bounty. It may have been claimed by another agent.",
         variant: "destructive",
       });
       // Refresh the bounties list
