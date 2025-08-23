@@ -36,9 +36,17 @@ const Analyze = () => {
   const [loading, setLoading] = useState(true);
   const [requesting, setRequesting] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [addressFromQuery, setAddressFromQuery] = useState<string>('');
 
   useEffect(() => {
-    fetchPropertyAndReport();
+    const urlParams = new URLSearchParams(window.location.search);
+    const address = urlParams.get('address');
+    if (address && !propertyId) {
+      setAddressFromQuery(address);
+      setLoading(false);
+    } else if (propertyId) {
+      fetchPropertyAndReport();
+    }
   }, [propertyId]);
 
   const fetchPropertyAndReport = async () => {
@@ -84,21 +92,51 @@ const Analyze = () => {
   };
 
   const requestAnalysis = async () => {
-    if (!property) return;
+    // Check if user is authenticated
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      navigate('/auth');
+      return;
+    }
+
+    const targetAddress = property?.full_address || addressFromQuery;
+    if (!targetAddress) return;
 
     setRequesting(true);
     try {
+      // Create or find property
+      let propertyId;
+      const { data: existingProperty, error: searchError } = await supabase
+        .from('properties')
+        .select('*')
+        .ilike('full_address', `%${targetAddress.trim()}%`)
+        .single();
+
+      if (existingProperty) {
+        propertyId = existingProperty.id;
+      } else {
+        const { data: newProperty, error: insertError } = await supabase
+          .from('properties')
+          .insert({
+            full_address: targetAddress.trim(),
+            street_address: targetAddress.trim(),
+            city: '',
+            state: '',
+            zip_code: ''
+          })
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+        propertyId = newProperty.id;
+      }
+
       // Check if bounty already exists
       const { data: existingBounty, error: bountyError } = await supabase
         .from('disclosure_bounties')
         .select('*')
-        .eq('property_id', property.id)
+        .eq('property_id', propertyId)
         .maybeSingle();
-
-      if (bountyError) {
-        console.error('Error checking bounty:', bountyError);
-        throw bountyError;
-      }
 
       if (existingBounty) {
         toast({
@@ -108,12 +146,12 @@ const Analyze = () => {
         return;
       }
 
-      // Create new bounty (no user_id since we removed auth)
+      // Create new bounty
       const { error: createError } = await supabase
         .from('disclosure_bounties')
         .insert({
-          property_id: property.id,
-          requested_by_user_id: null, // Use null instead of fake UUID
+          property_id: propertyId,
+          requested_by_user_id: user.id,
           status: 'open'
         });
 
@@ -150,6 +188,65 @@ const Analyze = () => {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  // Show request form for new analysis
+  if (!property && addressFromQuery) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-8">
+          <div className="max-w-4xl mx-auto">
+            <Button
+              variant="ghost"
+              onClick={() => navigate('/')}
+              className="mb-6"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Search
+            </Button>
+
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold mb-2">Request Property Analysis</h1>
+              <p className="text-xl text-muted-foreground">{addressFromQuery}</p>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="w-5 h-5" />
+                  No Analysis Available
+                </CardTitle>
+                <CardDescription>
+                  No disclosure analysis found for {addressFromQuery}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground mb-6">
+                  Request a free analysis from our network of licensed real estate agents. 
+                  Once an agent uploads the disclosure documents, our AI will analyze them 
+                  and provide you with a detailed risk assessment.
+                </p>
+                <Button 
+                  onClick={requestAnalysis}
+                  disabled={requesting}
+                  size="lg"
+                  className="w-full"
+                >
+                  {requesting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Submitting Request...
+                    </>
+                  ) : (
+                    'Request Free Analysis'
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     );
   }

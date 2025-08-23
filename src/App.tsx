@@ -28,6 +28,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/analyze/:propertyId" element={<Analyze />} />
+            <Route path="/analyze/new" element={<Analyze />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/confirm-email" element={<EmailConfirmation />} />
             <Route path="/dashboard" element={<BuyerDashboard />} />
