@@ -27,7 +27,7 @@ const Navigation = () => {
           >
             <Link to="/agent-dashboard">
               <Users className="w-4 h-4 mr-2" />
-              Agent Portal
+              Agent Login
             </Link>
           </Button>
         </div>

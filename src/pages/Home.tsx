@@ -151,7 +151,8 @@ const Home = () => {
               <Users className="w-8 h-8 mx-auto mb-2 text-primary" />
               <CardTitle>Agent Network</CardTitle>
               <CardDescription>
-                Licensed real estate agents upload disclosures and earn credits for verified reports
+              Licensed real estate agents upload disclosures and earn credits for verified reports.
+              <br /><a href="/agent-dashboard" className="text-primary hover:underline font-medium">Agent Login →</a>
               </CardDescription>
             </CardHeader>
           </Card>

@@ -57,9 +57,10 @@ const Analyze = () => {
         .select('*')
         .eq('property_id', propertyId)
         .eq('status', 'complete')
-        .single();
+        .maybeSingle();
 
-      if (reportError && reportError.code !== 'PGRST116') {
+      if (reportError) {
+        console.error('Error fetching report:', reportError);
         throw reportError;
       }
 
@@ -88,9 +89,10 @@ const Analyze = () => {
         .from('disclosure_bounties')
         .select('*')
         .eq('property_id', property.id)
-        .single();
+        .maybeSingle();
 
-      if (bountyError && bountyError.code !== 'PGRST116') {
+      if (bountyError) {
+        console.error('Error checking bounty:', bountyError);
         throw bountyError;
       }
 
