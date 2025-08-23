@@ -62,6 +62,20 @@ const Auth = () => {
     setLoading(false);
   };
 
+  const handleDemoLogin = async () => {
+    setLoading(true);
+    const { error } = await signIn('demo@intellehouse.com', 'demo123');
+    
+    if (error) {
+      toast({
+        title: "Demo login failed",
+        description: "Demo account may not be set up yet",
+        variant: "destructive",
+      });
+    }
+    setLoading(false);
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
@@ -70,6 +84,26 @@ const Auth = () => {
           <CardDescription>Access your real estate disclosure platform</CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="mb-4">
+            <Button 
+              onClick={handleDemoLogin} 
+              variant="outline" 
+              className="w-full"
+              disabled={loading}
+            >
+              {loading ? "Signing in..." : "Try Demo Account"}
+            </Button>
+            <div className="relative my-4">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">
+                  Or continue with email
+                </span>
+              </div>
+            </div>
+          </div>
           <Tabs defaultValue="signin" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="signin">Sign In</TabsTrigger>
