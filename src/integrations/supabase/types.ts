@@ -203,6 +203,7 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string
+          credits: number | null
           email: string
           first_name: string | null
           id: string
@@ -217,6 +218,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          credits?: number | null
           email: string
           first_name?: string | null
           id?: string
@@ -231,6 +233,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          credits?: number | null
           email?: string
           first_name?: string | null
           id?: string
@@ -278,14 +281,59 @@ export type Database = {
         }
         Relationships: []
       }
+      showing_bids: {
+        Row: {
+          bid_amount: number
+          bidding_agent_id: string
+          created_at: string | null
+          id: string
+          selected_time_slot: string | null
+          showing_request_id: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          bid_amount: number
+          bidding_agent_id: string
+          created_at?: string | null
+          id?: string
+          selected_time_slot?: string | null
+          showing_request_id?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          bid_amount?: number
+          bidding_agent_id?: string
+          created_at?: string | null
+          id?: string
+          selected_time_slot?: string | null
+          showing_request_id?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "showing_bids_showing_request_id_fkey"
+            columns: ["showing_request_id"]
+            isOneToOne: false
+            referencedRelation: "showing_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       showing_requests: {
         Row: {
           created_at: string
+          credits_spent: number | null
           current_high_bid: number | null
           id: string
+          preferred_dates: Json | null
           preferred_times: string | null
           property_id: string
+          refund_deadline: string | null
           requested_by_user_id: string
+          selected_time_slot: string | null
           status: Database["public"]["Enums"]["showing_status"] | null
           updated_at: string
           winning_agent_id: string | null
@@ -293,11 +341,15 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          credits_spent?: number | null
           current_high_bid?: number | null
           id?: string
+          preferred_dates?: Json | null
           preferred_times?: string | null
           property_id: string
+          refund_deadline?: string | null
           requested_by_user_id: string
+          selected_time_slot?: string | null
           status?: Database["public"]["Enums"]["showing_status"] | null
           updated_at?: string
           winning_agent_id?: string | null
@@ -305,11 +357,15 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          credits_spent?: number | null
           current_high_bid?: number | null
           id?: string
+          preferred_dates?: Json | null
           preferred_times?: string | null
           property_id?: string
+          refund_deadline?: string | null
           requested_by_user_id?: string
+          selected_time_slot?: string | null
           status?: Database["public"]["Enums"]["showing_status"] | null
           updated_at?: string
           winning_agent_id?: string | null
