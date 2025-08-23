@@ -300,10 +300,25 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
 
   const confirmShowing = async (showingId: string) => {
     try {
+      // Get current showing data first
+      const { data: currentShowing, error: fetchError } = await supabase
+        .from('showing_requests')
+        .select('confirmation_status, buyer_confirmed_at')
+        .eq('id', showingId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Determine new confirmation status
+      let newStatus: 'agent_confirmed' | 'both_confirmed' = 'agent_confirmed';
+      if (currentShowing.buyer_confirmed_at) {
+        newStatus = 'both_confirmed';
+      }
+
       const { error } = await supabase
         .from('showing_requests')
         .update({
-          confirmation_status: 'agent_confirmed',
+          confirmation_status: newStatus,
           agent_confirmed_at: new Date().toISOString()
         })
         .eq('id', showingId);
@@ -312,11 +327,15 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
 
       toast({
         title: "Showing Confirmed",
-        description: "You've confirmed this showing. Waiting for buyer confirmation to earn credits.",
+        description: newStatus === 'both_confirmed' 
+          ? "Both parties confirmed! You've earned your credits back."
+          : "You've confirmed this showing. Waiting for buyer confirmation to earn credits.",
       });
 
+      // Refresh data
       fetchUpcomingShowings();
       fetchCreditTransactions();
+      fetchAgentProfile(); // Refresh credit balance
     } catch (error) {
       console.error('Error confirming showing:', error);
       toast({
@@ -668,12 +687,12 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
                                  <Clock className="w-4 h-4 mr-2 text-gray-500" />
                                )}
                                {showing.confirmation_status === 'both_confirmed' 
-                                 ? 'Both parties confirmed' 
+                                 ? 'Both parties confirmed - Credits earned!' 
                                  : showing.confirmation_status === 'agent_confirmed'
-                                 ? 'Waiting for buyer confirmation'
+                                 ? 'You confirmed - Waiting for buyer'
                                  : 'Pending confirmation'}
                              </div>
-                             {showing.confirmation_status !== 'agent_confirmed' && showing.confirmation_status !== 'both_confirmed' && (
+                             {showing.confirmation_status === 'pending' ? (
                                <Button 
                                  size="sm" 
                                  onClick={() => confirmShowing(showing.id)}
@@ -681,6 +700,26 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
                                >
                                  <CheckCircle className="w-4 h-4 mr-2" />
                                  Confirm Showing Completed
+                               </Button>
+                             ) : showing.confirmation_status === 'agent_confirmed' ? (
+                               <Button 
+                                 size="sm" 
+                                 variant="outline"
+                                 className="w-full bg-green-50 text-green-700 border-green-200"
+                                 disabled
+                               >
+                                 <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
+                                 You Confirmed
+                               </Button>
+                             ) : (
+                               <Button 
+                                 size="sm" 
+                                 variant="outline"
+                                 className="w-full bg-green-50 text-green-700 border-green-200"
+                                 disabled
+                               >
+                                 <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
+                                 Completed & Credits Earned
                                </Button>
                              )}
                            </div>

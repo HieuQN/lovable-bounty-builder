@@ -185,10 +185,25 @@ const BuyerDashboard = () => {
 
   const confirmShowing = async (showingId: string) => {
     try {
+      // Get current showing data first
+      const { data: currentShowing, error: fetchError } = await supabase
+        .from('showing_requests')
+        .select('confirmation_status, agent_confirmed_at')
+        .eq('id', showingId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Determine new confirmation status
+      let newStatus: 'buyer_confirmed' | 'both_confirmed' = 'buyer_confirmed';
+      if (currentShowing.agent_confirmed_at) {
+        newStatus = 'both_confirmed';
+      }
+
       const { error } = await supabase
         .from('showing_requests')
         .update({
-          confirmation_status: 'buyer_confirmed',
+          confirmation_status: newStatus,
           buyer_confirmed_at: new Date().toISOString()
         })
         .eq('id', showingId);
@@ -197,7 +212,9 @@ const BuyerDashboard = () => {
 
       toast({
         title: "Showing Confirmed",
-        description: "You've confirmed this showing. Agent will receive credits once both parties confirm.",
+        description: newStatus === 'both_confirmed' 
+          ? "Both parties confirmed! Agent will receive their credits."
+          : "You've confirmed this showing. Waiting for agent confirmation.",
       });
 
       fetchUserData();
@@ -458,12 +475,12 @@ const BuyerDashboard = () => {
                                    <Clock className="w-4 h-4 mr-2 text-gray-500" />
                                  )}
                                  {request.confirmation_status === 'both_confirmed' 
-                                   ? 'Both parties confirmed' 
+                                   ? 'Both parties confirmed - Complete!' 
                                    : request.confirmation_status === 'buyer_confirmed'
-                                   ? 'Waiting for agent confirmation'
+                                   ? 'You confirmed - Waiting for agent'
                                    : 'Pending confirmation'}
                                </div>
-                               {request.confirmation_status !== 'buyer_confirmed' && request.confirmation_status !== 'both_confirmed' && (
+                               {request.confirmation_status === 'pending' ? (
                                  <Button 
                                    size="sm" 
                                    onClick={() => confirmShowing(request.id)}
@@ -471,6 +488,26 @@ const BuyerDashboard = () => {
                                  >
                                    <CheckCircle className="w-4 h-4 mr-2" />
                                    Confirm Showing Completed
+                                 </Button>
+                               ) : request.confirmation_status === 'buyer_confirmed' ? (
+                                 <Button 
+                                   size="sm" 
+                                   variant="outline"
+                                   className="w-full bg-green-50 text-green-700 border-green-200"
+                                   disabled
+                                 >
+                                   <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
+                                   You Confirmed
+                                 </Button>
+                               ) : (
+                                 <Button 
+                                   size="sm" 
+                                   variant="outline"
+                                   className="w-full bg-green-50 text-green-700 border-green-200"
+                                   disabled
+                                 >
+                                   <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
+                                   Completed
                                  </Button>
                                )}
                              </div>
