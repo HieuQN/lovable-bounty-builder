@@ -184,8 +184,10 @@ const BuyerDashboard = () => {
     switch (status) {
       case 'bidding':
         return <Badge variant="secondary">Open for Bids</Badge>;
-      case 'matched':
-        return <Badge variant="default">Matched</Badge>;
+      case 'awarded':
+        return <Badge variant="default">Awarded</Badge>;
+      case 'confirmed':
+        return <Badge variant="default">Confirmed</Badge>;
       case 'completed':
         return <Badge variant="outline">Completed</Badge>;
       case 'expired':
