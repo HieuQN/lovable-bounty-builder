@@ -89,11 +89,16 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
 
   useEffect(() => {
     if (user) {
-      fetchAgentProfile();
-      fetchBounties();
-      fetchShowingRequests();
-      fetchMyDisclosures();
-      fetchUpcomingShowings();
+      // Fetch all data in parallel for faster loading
+      Promise.all([
+        fetchAgentProfile(),
+        fetchBounties(),
+        fetchShowingRequests(),
+        fetchMyDisclosures(),
+        fetchUpcomingShowings()
+      ]).finally(() => {
+        setLoading(false);
+      });
     }
   }, [user]);
 
