@@ -20,6 +20,29 @@ interface Bounty {
   };
 }
 
+const UploadDisclosureWrapper = () => {
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    return sessionStorage.getItem('agentLoggedIn') === 'true';
+  });
+
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6 text-center">
+            <p className="text-muted-foreground mb-4">Please log in to access the upload page</p>
+            <Button onClick={() => window.location.href = '/agent-dashboard'}>
+              Go to Agent Login
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return <UploadDisclosure />;
+};
+
 const UploadDisclosure = () => {
   const { bountyId } = useParams();
   const navigate = useNavigate();
@@ -110,6 +133,8 @@ const UploadDisclosure = () => {
     setUploading(true);
     
     try {
+      console.log('Creating disclosure report for bounty:', bounty.id);
+      
       // Create disclosure report
       const { data: report, error: reportError } = await supabase
         .from('disclosure_reports')
@@ -121,7 +146,12 @@ const UploadDisclosure = () => {
         .select('id')
         .single();
 
-      if (reportError) throw reportError;
+      if (reportError) {
+        console.error('Error creating report:', reportError);
+        throw reportError;
+      }
+
+      console.log('Report created:', report.id);
 
       // Update bounty status
       const { error: bountyError } = await supabase
@@ -129,9 +159,15 @@ const UploadDisclosure = () => {
         .update({ status: 'completed' })
         .eq('id', bounty.id);
 
-      if (bountyError) throw bountyError;
+      if (bountyError) {
+        console.error('Error updating bounty:', bountyError);
+        throw bountyError;
+      }
+
+      console.log('Bounty updated to completed');
 
       // Call the edge function to process the analysis
+      console.log('Calling process-analysis function...');
       const { error: functionError } = await supabase.functions.invoke('process-analysis', {
         body: { 
           reportId: report.id,
@@ -142,6 +178,8 @@ const UploadDisclosure = () => {
       if (functionError) {
         console.error('Error calling process-analysis function:', functionError);
         // Don't throw here - the report is created, analysis will just be delayed
+      } else {
+        console.log('Process-analysis function called successfully');
       }
 
       toast({
@@ -293,4 +331,4 @@ const UploadDisclosure = () => {
   );
 };
 
-export default UploadDisclosure;
+export default UploadDisclosureWrapper;

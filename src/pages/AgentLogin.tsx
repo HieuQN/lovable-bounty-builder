@@ -10,7 +10,10 @@ import { UserCheck } from 'lucide-react';
 const AgentLogin = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    // Check if already logged in from sessionStorage
+    return sessionStorage.getItem('agentLoggedIn') === 'true';
+  });
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -20,6 +23,7 @@ const AgentLogin = () => {
     // Simple hardcoded auth for demo
     if (username === 'admin' && password === 'test123') {
       setIsLoggedIn(true);
+      sessionStorage.setItem('agentLoggedIn', 'true');
       toast({
         title: "Login Successful",
         description: "Welcome to the agent dashboard!",
@@ -36,7 +40,10 @@ const AgentLogin = () => {
   };
 
   if (isLoggedIn) {
-    return <AgentDashboard onLogout={() => setIsLoggedIn(false)} />;
+    return <AgentDashboard onLogout={() => {
+      setIsLoggedIn(false);
+      sessionStorage.removeItem('agentLoggedIn');
+    }} />;
   }
 
   return (

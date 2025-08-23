@@ -92,6 +92,8 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
 
   const claimBounty = async (bountyId: string) => {
     try {
+      console.log('Claiming bounty:', bountyId);
+      
       const claimExpiration = new Date();
       claimExpiration.setHours(claimExpiration.getHours() + 2);
 
@@ -105,14 +107,20 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
         .eq('id', bountyId)
         .eq('status', 'open'); // Ensure it's still open
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error claiming bounty:', error);
+        throw error;
+      }
+
+      console.log('Bounty claimed successfully');
 
       toast({
         title: "Bounty Claimed!",
         description: "You have 2 hours to upload the disclosure documents.",
       });
 
-      navigate(`/upload/${bountyId}`);
+      // Navigate to upload page while maintaining login state
+      window.location.href = `/upload/${bountyId}`;
     } catch (error) {
       console.error('Error claiming bounty:', error);
       toast({
@@ -120,6 +128,8 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
         description: "Failed to claim bounty. It may have been claimed by another agent.",
         variant: "destructive",
       });
+      // Refresh the bounties list
+      fetchBounties();
     }
   };
 
