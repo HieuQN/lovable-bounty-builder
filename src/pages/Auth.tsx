@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/components/ui/use-toast';
+import CreateDemoUser from '@/components/CreateDemoUser';
 
 const Auth = () => {
   const { user, signIn, signUp } = useAuth();
@@ -175,6 +176,13 @@ const Auth = () => {
               </form>
             </TabsContent>
           </Tabs>
+          
+          <div className="mt-4 text-center">
+            <p className="text-sm text-muted-foreground mb-2">
+              Need to set up the demo account?
+            </p>
+            <CreateDemoUser />
+          </div>
         </CardContent>
       </Card>
     </div>
