@@ -56,6 +56,7 @@ const BuyerDashboard = () => {
   const [reports, setReports] = useState<DisclosureReport[]>([]);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [showingRequests, setShowingRequests] = useState<ShowingRequest[]>([]);
+  const [completedShowings, setCompletedShowings] = useState<ShowingRequest[]>([]);
   const [userCredits, setUserCredits] = useState<number>(0);
   const [loadingData, setLoadingData] = useState(true);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
@@ -100,7 +101,7 @@ const BuyerDashboard = () => {
       if (reportsError) throw reportsError;
       setReports(reportsData || []);
 
-      // Fetch user's showing requests
+      // Fetch user's showing requests (active ones only)
       const { data: showingData, error: showingError } = await supabase
         .from('showing_requests')
         .select(`
@@ -108,10 +109,25 @@ const BuyerDashboard = () => {
           properties (*)
         `)
         .eq('requested_by_user_id', user?.id)
+        .neq('confirmation_status', 'both_confirmed')
         .order('created_at', { ascending: false });
 
       if (showingError) throw showingError;
       setShowingRequests(showingData || []);
+
+      // Fetch completed showings
+      const { data: completedData, error: completedError } = await supabase
+        .from('showing_requests')
+        .select(`
+          *,
+          properties (*)
+        `)
+        .eq('requested_by_user_id', user?.id)
+        .eq('confirmation_status', 'both_confirmed')
+        .order('created_at', { ascending: false });
+
+      if (completedError) throw completedError;
+      setCompletedShowings(completedData || []);
 
       // Mock saved searches for demo
       setSavedSearches([
@@ -311,10 +327,15 @@ const BuyerDashboard = () => {
 
       <div className="container mx-auto px-4 py-8">
         <Tabs defaultValue="reports" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="reports" className="flex items-center gap-2">
               <FileText className="w-4 h-4" />
               My Reports
+              {reports.length > 0 && (
+                <Badge variant="secondary" className="ml-1 h-5 text-xs">
+                  {reports.length}
+                </Badge>
+              )}
             </TabsTrigger>
             <TabsTrigger value="compare" className="flex items-center gap-2">
               <Search className="w-4 h-4" />
@@ -323,6 +344,20 @@ const BuyerDashboard = () => {
             <TabsTrigger value="showings" className="flex items-center gap-2">
               <Calendar className="w-4 h-4" />
               Showing Requests
+              {showingRequests.length > 0 && (
+                <Badge variant="secondary" className="ml-1 h-5 text-xs">
+                  {showingRequests.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="completed" className="flex items-center gap-2">
+              <CheckCircle className="w-4 h-4" />
+              Completed Showings
+              {completedShowings.length > 0 && (
+                <Badge variant="default" className="ml-1 h-5 text-xs bg-green-600 hover:bg-green-700">
+                  {completedShowings.length}
+                </Badge>
+              )}
             </TabsTrigger>
             <TabsTrigger value="searches" className="flex items-center gap-2">
               <Search className="w-4 h-4" />
@@ -854,6 +889,109 @@ const BuyerDashboard = () => {
                            )}
                          </div>
                        </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="completed" className="mt-6">
+            <div className="grid gap-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-semibold">Completed Showings</h2>
+                <Badge variant="secondary">{completedShowings.length} Completed</Badge>
+              </div>
+
+              {completedShowings.length === 0 ? (
+                <Card>
+                  <CardContent className="pt-6 text-center">
+                    <CheckCircle className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                    <h3 className="text-lg font-semibold mb-2">No Completed Showings</h3>
+                    <p className="text-muted-foreground mb-4">
+                      Your completed showings will appear here once both you and the agent confirm completion.
+                    </p>
+                    <Button onClick={() => navigate('/')}>
+                      Search Properties
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4">
+                  {completedShowings.map((request) => (
+                    <Card key={request.id} className="border-green-200 bg-green-50/50">
+                      <CardHeader>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <CardTitle className="text-lg">{request.properties?.full_address}</CardTitle>
+                            <CardDescription>
+                              Completed on {request.buyer_confirmed_at ? new Date(request.buyer_confirmed_at).toLocaleDateString() : 'Recently'}
+                            </CardDescription>
+                          </div>
+                          <div className="flex flex-col items-end gap-2">
+                            <Badge variant="default" className="bg-green-600 hover:bg-green-700">
+                              <CheckCircle className="w-3 h-3 mr-1" />
+                              Completed
+                            </Badge>
+                            {request.selected_time_slot && (
+                              <Badge variant="outline" className="text-xs">
+                                {request.selected_time_slot}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                              <div className="flex items-center gap-1">
+                                <Coins className="w-4 h-4" />
+                                <span>{request.credits_spent} Credits Spent</span>
+                              </div>
+                              {request.winning_bid_amount && (
+                                <div>
+                                  Final Bid: {request.winning_bid_amount} Credits
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <div className="bg-green-100 border border-green-200 rounded-lg p-3">
+                            <div className="flex items-center text-sm text-green-800">
+                              <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
+                              Both parties confirmed completion - Showing successfully completed!
+                            </div>
+                            {request.agent_confirmed_at && request.buyer_confirmed_at && (
+                              <div className="text-xs text-green-600 mt-1">
+                                Confirmed: {new Date(Math.max(
+                                  new Date(request.agent_confirmed_at).getTime(),
+                                  new Date(request.buyer_confirmed_at).getTime()
+                                )).toLocaleDateString()}
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="flex gap-2">
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => handlePropertySelect(request.properties!)}
+                            >
+                              <Calendar className="w-4 h-4 mr-2" />
+                              Request Another Showing
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => navigate('/')}
+                            >
+                              <Search className="w-4 h-4 mr-2" />
+                              Search Similar Properties
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
                     </Card>
                   ))}
                 </div>

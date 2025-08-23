@@ -93,6 +93,7 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
   const [showingRequests, setShowingRequests] = useState<ShowingRequest[]>([]);
   const [myDisclosures, setMyDisclosures] = useState<DisclosureReport[]>([]);
   const [upcomingShowings, setUpcomingShowings] = useState<UpcomingShowing[]>([]);
+  const [completedShowings, setCompletedShowings] = useState<UpcomingShowing[]>([]);
   const [creditTransactions, setCreditTransactions] = useState<CreditTransaction[]>([]);
   const [selectedShowingRequest, setSelectedShowingRequest] = useState<ShowingRequest | null>(null);
   const [isBidModalOpen, setIsBidModalOpen] = useState(false);
@@ -110,6 +111,7 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
         fetchShowingRequests(),
         fetchMyDisclosures(),
         fetchUpcomingShowings(),
+        fetchCompletedShowings(),
         fetchCreditTransactions()
       ]).finally(() => {
         setLoading(false);
@@ -264,6 +266,7 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
           )
         `)
         .eq('winning_agent_id', agentProfile.id)
+        .neq('confirmation_status', 'both_confirmed')
         .in('status', ['awarded', 'confirmed'])
         .order('created_at', { ascending: false });
 
@@ -271,6 +274,37 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
       setUpcomingShowings(data || []);
     } catch (error) {
       console.error('Error fetching upcoming showings:', error);
+    }
+  };
+
+  const fetchCompletedShowings = async () => {
+    try {
+      const { data: agentProfile } = await supabase
+        .from('agent_profiles')
+        .select('id')
+        .eq('user_id', user?.id)
+        .single();
+
+      if (!agentProfile) return;
+
+      const { data, error } = await supabase
+        .from('showing_requests')
+        .select(`
+          *,
+          properties (
+            full_address,
+            city,
+            state
+          )
+        `)
+        .eq('winning_agent_id', agentProfile.id)
+        .eq('confirmation_status', 'both_confirmed')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setCompletedShowings(data || []);
+    } catch (error) {
+      console.error('Error fetching completed showings:', error);
     }
   };
 
@@ -525,7 +559,7 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
 
           {/* Available Work Tabs */}
           <Tabs defaultValue="disclosures" className="w-full">
-            <TabsList className="grid w-full grid-cols-5">
+            <TabsList className="grid w-full grid-cols-6">
               <TabsTrigger value="disclosures" className="flex items-center gap-2">
                 <FileText className="w-4 h-4" />
                 My Disclosures
@@ -541,6 +575,15 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
                 {upcomingShowings.length > 0 && (
                   <Badge variant="secondary" className="ml-1 h-5 text-xs">
                     {upcomingShowings.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="completed" className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4" />
+                Completed Showings
+                {completedShowings.length > 0 && (
+                  <Badge variant="default" className="ml-1 h-5 text-xs bg-green-600 hover:bg-green-700">
+                    {completedShowings.length}
                   </Badge>
                 )}
               </TabsTrigger>
@@ -756,6 +799,93 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
                                   Completed & Credits Earned
                                 </Button>
                               )}
+                           </div>
+                         </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="completed" className="mt-6">
+              <h2 className="text-2xl font-semibold mb-4">Completed Showings</h2>
+              
+              {completedShowings.length === 0 ? (
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center py-8">
+                      <CheckCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold mb-2">No completed showings</h3>
+                      <p className="text-muted-foreground">
+                        Your completed showings will appear here once both parties confirm completion
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {completedShowings.map((showing) => (
+                    <Card key={showing.id} className="hover:shadow-lg transition-shadow border-green-200 bg-green-50/50">
+                      <CardHeader>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <CardTitle className="text-lg">
+                              {showing.properties?.full_address}
+                            </CardTitle>
+                            <CardDescription>
+                              {showing.properties?.city}, {showing.properties?.state}
+                            </CardDescription>
+                          </div>
+                          <Badge variant="default" className="bg-green-600 hover:bg-green-700">
+                            <CheckCircle className="w-3 h-3 mr-1" />
+                            Completed
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                         <div className="space-y-4">
+                           <div className="flex items-center text-sm text-muted-foreground">
+                             <Calendar className="w-4 h-4 mr-2" />
+                             Completed: {showing.agent_confirmed_at ? new Date(showing.agent_confirmed_at).toLocaleDateString() : 'Recently'}
+                           </div>
+                           {showing.selected_time_slot && (
+                             <div className="flex items-center text-sm font-medium text-green-600">
+                               <Clock className="w-4 h-4 mr-2" />
+                               {showing.selected_time_slot}
+                             </div>
+                           )}
+                           {showing.winning_bid_amount && (
+                             <div className="flex items-center text-sm text-green-600">
+                               <Coins className="w-4 h-4 mr-2" />
+                               Earned: {showing.winning_bid_amount} Credits
+                             </div>
+                           )}
+                           
+                           <div className="bg-green-100 border border-green-200 rounded-lg p-3">
+                             <div className="flex items-center text-sm text-green-800">
+                               <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
+                               Both parties confirmed completion - Credits earned!
+                             </div>
+                             {showing.agent_confirmed_at && showing.buyer_confirmed_at && (
+                               <div className="text-xs text-green-600 mt-1">
+                                 Confirmed: {new Date(Math.max(
+                                   new Date(showing.agent_confirmed_at).getTime(),
+                                   new Date(showing.buyer_confirmed_at).getTime()
+                                 )).toLocaleDateString()}
+                               </div>
+                             )}
+                           </div>
+                           
+                           <div className="flex gap-2">
+                             <Button 
+                               size="sm" 
+                               variant="outline"
+                               onClick={() => navigate('/')}
+                             >
+                               <Eye className="w-4 h-4 mr-2" />
+                               View Similar Properties
+                             </Button>
                            </div>
                          </div>
                       </CardContent>
