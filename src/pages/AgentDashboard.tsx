@@ -3,10 +3,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/components/ui/use-toast';
+import { toast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
-import { Coins, MapPin, Calendar, Upload, LogOut } from 'lucide-react';
+import { ShowingBidModal } from '@/components/ShowingBidModal';
+import { Coins, MapPin, Calendar, Upload, LogOut, Clock, Gavel } from 'lucide-react';
 
 interface AgentDashboardProps {
   onLogout?: () => void;
@@ -25,14 +27,34 @@ interface Bounty {
   };
 }
 
+interface ShowingRequest {
+  id: string;
+  property_id: string;
+  status: string;
+  credits_spent: number;
+  refund_deadline: string;
+  created_at: string;
+  preferred_dates: any;
+  preferred_times: string;
+  properties?: {
+    full_address: string;
+    city: string;
+    state: string;
+  };
+}
+
 const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
   const [bounties, setBounties] = useState<Bounty[]>([]);
   const [claimedBounties, setClaimedBounties] = useState<Bounty[]>([]);
+  const [showingRequests, setShowingRequests] = useState<ShowingRequest[]>([]);
+  const [selectedShowingRequest, setSelectedShowingRequest] = useState<ShowingRequest | null>(null);
+  const [isBidModalOpen, setIsBidModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   // Mock agent profile data (since we removed auth)
   const agentProfile = {
+    id: "agent-123",
     creditBalance: 150,
     licenseNumber: "RE-12345-CT",
     brokerageName: "Premier Realty Group"
@@ -40,6 +62,7 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
 
   useEffect(() => {
     fetchBounties();
+    fetchShowingRequests();
   }, []);
 
   const fetchBounties = async () => {
@@ -83,6 +106,34 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
       toast({
         title: "Error",
         description: "Failed to load bounties",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const fetchShowingRequests = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('showing_requests')
+        .select(`
+          *,
+          properties (
+            full_address,
+            city,
+            state
+          )
+        `)
+        .eq('status', 'bidding')
+        .gt('refund_deadline', new Date().toISOString())
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setShowingRequests(data || []);
+    } catch (error) {
+      console.error('Error fetching showing requests:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load showing requests",
         variant: "destructive",
       });
     } finally {
@@ -149,6 +200,15 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     
     return `${hours}h ${minutes}m remaining`;
+  };
+
+  const handleBidOnShowing = (showingRequest: ShowingRequest) => {
+    setSelectedShowingRequest(showingRequest);
+    setIsBidModalOpen(true);
+  };
+
+  const handleBidSuccess = () => {
+    fetchShowingRequests(); // Refresh showing requests
   };
 
   if (loading) {
@@ -242,64 +302,152 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
             </div>
           )}
 
-          {/* Available Bounties */}
-          <div>
-            <h2 className="text-2xl font-semibold mb-4">Available Bounties</h2>
-            
-            {bounties.length === 0 ? (
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="text-center py-8">
-                    <MapPin className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">No bounties available</h3>
-                    <p className="text-muted-foreground">
-                      Check back later for new disclosure requests in your area
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {bounties.map((bounty) => (
-                  <Card key={bounty.id} className="hover:shadow-lg transition-shadow">
-                    <CardHeader>
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <CardTitle className="text-lg">
-                            {bounty.properties?.full_address}
-                          </CardTitle>
-                          <CardDescription>
-                            {bounty.properties?.city}, {bounty.properties?.state}
-                          </CardDescription>
+          {/* Available Work Tabs */}
+          <Tabs defaultValue="bounties" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="bounties" className="flex items-center gap-2">
+                <Upload className="w-4 h-4" />
+                Disclosure Bounties
+              </TabsTrigger>
+              <TabsTrigger value="showings" className="flex items-center gap-2">
+                <Gavel className="w-4 h-4" />
+                Showing Requests
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="bounties" className="mt-6">
+              <h2 className="text-2xl font-semibold mb-4">Available Bounties</h2>
+              
+              {bounties.length === 0 ? (
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center py-8">
+                      <MapPin className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold mb-2">No bounties available</h3>
+                      <p className="text-muted-foreground">
+                        Check back later for new disclosure requests in your area
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {bounties.map((bounty) => (
+                    <Card key={bounty.id} className="hover:shadow-lg transition-shadow">
+                      <CardHeader>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <CardTitle className="text-lg">
+                              {bounty.properties?.full_address}
+                            </CardTitle>
+                            <CardDescription>
+                              {bounty.properties?.city}, {bounty.properties?.state}
+                            </CardDescription>
+                          </div>
+                          <Badge variant="default">{bounty.status}</Badge>
                         </div>
-                        <Badge variant="default">{bounty.status}</Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="flex items-center text-sm text-muted-foreground">
-                          <Calendar className="w-4 h-4 mr-2" />
-                          Posted: {new Date(bounty.created_at).toLocaleDateString()}
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div className="flex items-center text-sm text-muted-foreground">
+                            <Calendar className="w-4 h-4 mr-2" />
+                            Posted: {new Date(bounty.created_at).toLocaleDateString()}
+                          </div>
+                          <div className="flex items-center text-sm font-medium text-green-600">
+                            <Coins className="w-4 h-4 mr-2" />
+                            Earn 10 Credits
+                          </div>
+                          <Button 
+                            onClick={() => claimBounty(bounty.id)}
+                            className="w-full"
+                          >
+                            Claim Bounty
+                          </Button>
                         </div>
-                        <div className="flex items-center text-sm font-medium text-green-600">
-                          <Coins className="w-4 h-4 mr-2" />
-                          Earn 10 Credits
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="showings" className="mt-6">
+              <h2 className="text-2xl font-semibold mb-4">Showing Requests</h2>
+              
+              {showingRequests.length === 0 ? (
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center py-8">
+                      <Gavel className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold mb-2">No showing requests</h3>
+                      <p className="text-muted-foreground">
+                        Check back later for new showing requests in your area
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {showingRequests.map((request) => (
+                    <Card key={request.id} className="hover:shadow-lg transition-shadow">
+                      <CardHeader>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <CardTitle className="text-lg">
+                              {request.properties?.full_address}
+                            </CardTitle>
+                            <CardDescription>
+                              {request.properties?.city}, {request.properties?.state}
+                            </CardDescription>
+                          </div>
+                          <Badge variant="secondary">Open for Bids</Badge>
                         </div>
-                        <Button 
-                          onClick={() => claimBounty(bounty.id)}
-                          className="w-full"
-                        >
-                          Claim Bounty
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div className="flex items-center text-sm text-muted-foreground">
+                            <Calendar className="w-4 h-4 mr-2" />
+                            Posted: {new Date(request.created_at).toLocaleDateString()}
+                          </div>
+                          <div className="flex items-center text-sm text-orange-600">
+                            <Clock className="w-4 h-4 mr-2" />
+                            {formatTimeRemaining(request.refund_deadline)}
+                          </div>
+                          <div className="flex items-center text-sm font-medium text-green-600">
+                            <Coins className="w-4 h-4 mr-2" />
+                            Earn {request.credits_spent} Credits
+                          </div>
+                          <Button 
+                            onClick={() => handleBidOnShowing(request)}
+                            className="w-full"
+                          >
+                            <Gavel className="w-4 h-4 mr-2" />
+                            Bid on Showing
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
+
+      {/* Showing Bid Modal */}
+      {selectedShowingRequest && (
+        <ShowingBidModal
+          showingRequest={selectedShowingRequest}
+          agentId={agentProfile.id}
+          isOpen={isBidModalOpen}
+          onClose={() => {
+            setIsBidModalOpen(false);
+            setSelectedShowingRequest(null);
+          }}
+          onBidSuccess={handleBidSuccess}
+        />
+      )}
     </div>
   );
 };

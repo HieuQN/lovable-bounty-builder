@@ -6,8 +6,9 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { toast } from '@/components/ui/use-toast';
-import { LogOut, FileText, Search, Download, Eye } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
+import { ShowingRequestModal } from '@/components/ShowingRequestModal';
+import { LogOut, FileText, Search, Download, Eye, Calendar, Coins, Clock } from 'lucide-react';
 
 interface Property {
   id: string;
@@ -34,12 +35,28 @@ interface SavedSearch {
   created_at: string;
 }
 
+interface ShowingRequest {
+  id: string;
+  property_id: string;
+  status: string;
+  credits_spent: number;
+  refund_deadline: string;
+  created_at: string;
+  winning_bid_amount?: number;
+  selected_time_slot?: string;
+  properties?: Property;
+}
+
 const BuyerDashboard = () => {
   const { user, signOut, loading } = useAuth();
   const navigate = useNavigate();
   const [reports, setReports] = useState<DisclosureReport[]>([]);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
+  const [showingRequests, setShowingRequests] = useState<ShowingRequest[]>([]);
+  const [userCredits, setUserCredits] = useState<number>(0);
   const [loadingData, setLoadingData] = useState(true);
+  const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
+  const [isShowingModalOpen, setIsShowingModalOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -55,6 +72,16 @@ const BuyerDashboard = () => {
 
   const fetchUserData = async () => {
     try {
+      // Fetch user profile and credits
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('credits')
+        .eq('user_id', user?.id)
+        .single();
+
+      if (profileError) throw profileError;
+      setUserCredits(profileData?.credits || 0);
+
       // Fetch purchased reports - for demo, we'll show all complete reports
       const { data: reportsData, error: reportsError } = await supabase
         .from('disclosure_reports')
@@ -67,6 +94,19 @@ const BuyerDashboard = () => {
 
       if (reportsError) throw reportsError;
       setReports(reportsData || []);
+
+      // Fetch user's showing requests
+      const { data: showingData, error: showingError } = await supabase
+        .from('showing_requests')
+        .select(`
+          *,
+          properties (*)
+        `)
+        .eq('requested_by_user_id', user?.id)
+        .order('created_at', { ascending: false });
+
+      if (showingError) throw showingError;
+      setShowingRequests(showingData || []);
 
       // Mock saved searches for demo
       setSavedSearches([
@@ -131,6 +171,43 @@ const BuyerDashboard = () => {
     });
   };
 
+  const handlePropertySelect = (property: Property) => {
+    setSelectedProperty(property);
+    setIsShowingModalOpen(true);
+  };
+
+  const handleRequestSuccess = () => {
+    fetchUserData(); // Refresh data after successful request
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'bidding':
+        return <Badge variant="secondary">Open for Bids</Badge>;
+      case 'matched':
+        return <Badge variant="default">Matched</Badge>;
+      case 'completed':
+        return <Badge variant="outline">Completed</Badge>;
+      case 'expired':
+        return <Badge variant="destructive">Expired</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
+
+  const formatTimeRemaining = (deadline: string) => {
+    const now = new Date();
+    const expiry = new Date(deadline);
+    const diff = expiry.getTime() - now.getTime();
+    
+    if (diff <= 0) return "Expired";
+    
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    
+    return `${hours}h ${minutes}m remaining`;
+  };
+
   if (loading || loadingData) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -148,20 +225,30 @@ const BuyerDashboard = () => {
               <h1 className="text-2xl font-bold">Buyer Dashboard</h1>
               <p className="text-muted-foreground">Welcome back, {user?.user_metadata?.first_name || user?.email}</p>
             </div>
-            <Button variant="outline" onClick={handleSignOut}>
-              <LogOut className="w-4 h-4 mr-2" />
-              Sign Out
-            </Button>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Coins className="w-5 h-5 text-yellow-500" />
+                <span className="font-medium">{userCredits} Credits</span>
+              </div>
+              <Button variant="outline" onClick={handleSignOut}>
+                <LogOut className="w-4 h-4 mr-2" />
+                Sign Out
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
       <div className="container mx-auto px-4 py-8">
         <Tabs defaultValue="reports" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="reports" className="flex items-center gap-2">
               <FileText className="w-4 h-4" />
               My Reports
+            </TabsTrigger>
+            <TabsTrigger value="showings" className="flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              Showing Requests
             </TabsTrigger>
             <TabsTrigger value="searches" className="flex items-center gap-2">
               <Search className="w-4 h-4" />
@@ -184,9 +271,29 @@ const BuyerDashboard = () => {
                     <p className="text-muted-foreground mb-4">
                       Purchase property reports to view detailed analysis and risk assessments.
                     </p>
-                    <Button onClick={() => navigate('/')}>
-                      Search Properties
-                    </Button>
+                    <div className="space-y-4">
+                      <Button onClick={() => navigate('/')}>
+                        Search Properties
+                      </Button>
+                      <div className="text-center">
+                        <p className="text-sm text-muted-foreground mb-2">
+                          Want to schedule a showing? Try with a demo property:
+                        </p>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handlePropertySelect({
+                            id: '123',
+                            full_address: '123 Demo Street',
+                            city: 'San Francisco',
+                            state: 'CA'
+                          })}
+                        >
+                          <Calendar className="w-4 h-4 mr-2" />
+                          Request Demo Showing
+                        </Button>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               ) : (
@@ -226,6 +333,84 @@ const BuyerDashboard = () => {
                             <Download className="w-4 h-4 mr-2" />
                             Download
                           </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => handlePropertySelect(report.properties)}
+                          >
+                            <Calendar className="w-4 h-4 mr-2" />
+                            Request Showing
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="showings" className="mt-6">
+            <div className="grid gap-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-semibold">My Showing Requests</h2>
+                <Badge variant="secondary">{showingRequests.length} Requests</Badge>
+              </div>
+
+              {showingRequests.length === 0 ? (
+                <Card>
+                  <CardContent className="pt-6 text-center">
+                    <Calendar className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                    <h3 className="text-lg font-semibold mb-2">No Showing Requests</h3>
+                    <p className="text-muted-foreground mb-4">
+                      Request property showings to connect with agents in your area.
+                    </p>
+                    <Button onClick={() => navigate('/')}>
+                      Search Properties
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4">
+                  {showingRequests.map((request) => (
+                    <Card key={request.id}>
+                      <CardHeader>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <CardTitle className="text-lg">{request.properties?.full_address}</CardTitle>
+                            <CardDescription>
+                              Requested on {new Date(request.created_at).toLocaleDateString()}
+                            </CardDescription>
+                          </div>
+                          <div className="flex flex-col items-end gap-2">
+                            {getStatusBadge(request.status)}
+                            {request.status === 'bidding' && (
+                              <Badge variant="outline" className="text-xs">
+                                <Clock className="w-3 h-3 mr-1" />
+                                {formatTimeRemaining(request.refund_deadline)}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                            <div className="flex items-center gap-1">
+                              <Coins className="w-4 h-4" />
+                              <span>{request.credits_spent} Credits</span>
+                            </div>
+                            {request.winning_bid_amount && (
+                              <div>
+                                Winning Bid: {request.winning_bid_amount} Credits
+                              </div>
+                            )}
+                          </div>
+                          {request.selected_time_slot && (
+                            <Badge variant="outline">
+                              {request.selected_time_slot}
+                            </Badge>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
@@ -263,6 +448,20 @@ const BuyerDashboard = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Showing Request Modal */}
+      {selectedProperty && (
+        <ShowingRequestModal
+          property={selectedProperty}
+          isOpen={isShowingModalOpen}
+          onClose={() => {
+            setIsShowingModalOpen(false);
+            setSelectedProperty(null);
+          }}
+          userCredits={userCredits}
+          onRequestSuccess={handleRequestSuccess}
+        />
+      )}
     </div>
   );
 };
