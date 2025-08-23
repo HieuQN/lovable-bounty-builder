@@ -12,7 +12,8 @@ import { CreateDemoUser } from '@/components/CreateDemoUser';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Eye, EyeOff, UserIcon, Briefcase, Mail } from 'lucide-react';
+import { Eye, EyeOff, UserIcon, Briefcase, Mail, ArrowLeft } from 'lucide-react';
+import ProfessionalNavigation from '@/components/ProfessionalNavigation';
 
 const Auth = () => {
   const { user, signIn, signUp, loading } = useAuth();
@@ -211,15 +212,51 @@ const Auth = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className="w-full max-w-4xl grid lg:grid-cols-2 gap-8">
-        {/* Auth Form */}
-        <Card className="w-full">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl font-bold">IntelleHouse</CardTitle>
-            <CardDescription>Access your real estate disclosure platform</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
+    <div className="min-h-screen hero-section">
+      <ProfessionalNavigation />
+      
+      <div className="container mx-auto flex items-center justify-center px-4 py-16">
+        <div className="w-full max-w-5xl grid lg:grid-cols-2 gap-12 items-center">
+          {/* Left Side - Marketing Content */}
+          <div className="text-center lg:text-left space-y-6">
+            <div>
+              <h1 className="text-4xl md:text-5xl font-bold mb-4 leading-tight">
+                Join the Future of{" "}
+                <span className="bg-gradient-to-r from-primary to-primary-hover bg-clip-text text-transparent">
+                  Real Estate
+                </span>
+              </h1>
+              <p className="text-xl text-muted-foreground leading-relaxed max-w-lg">
+                Access AI-powered property insights, connect with verified agents, and make smarter real estate decisions.
+              </p>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 bg-primary rounded-full"></div>
+                <span className="text-muted-foreground">Instant property analysis</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 bg-primary rounded-full"></div>
+                <span className="text-muted-foreground">Professional agent network</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 bg-primary rounded-full"></div>
+                <span className="text-muted-foreground">Cost estimation tools</span>
+              </div>
+            </div>
+          </div>
+        
+        {/* Right Side - Auth Form */}
+        <div className="w-full max-w-md mx-auto lg:mx-0">
+          <Card className="card-gradient border-0 shadow-lg">
+            <CardHeader className="text-center space-y-2">
+              <CardTitle className="text-2xl font-bold">Welcome to IntelleHouse</CardTitle>
+              <CardDescription className="text-base">
+                Sign in to your account or create a new one
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
             {/* Demo Account Buttons */}
             <div className="text-center space-y-4">
               <div className="space-y-2">
@@ -396,16 +433,18 @@ const Auth = () => {
             </Tabs>
           </CardContent>
         </Card>
-
+        
         {/* Demo Account Creation */}
-        <div className="flex items-center justify-center">
+        <div className="mt-8">
           <CreateDemoUser />
         </div>
       </div>
-
+    </div>
+  </div>
+      
       {/* Resend Verification Modal */}
       <AlertDialog open={showResendModal} onOpenChange={setShowResendModal}>
-        <AlertDialogContent>
+        <AlertDialogContent className="dropdown-content">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <Mail className="w-5 h-5" />
@@ -422,7 +461,7 @@ const Auth = () => {
             >
               Cancel
             </Button>
-            <AlertDialogAction onClick={handleResendVerification}>
+            <AlertDialogAction onClick={handleResendVerification} className="btn-primary">
               Resend Verification Email
             </AlertDialogAction>
           </AlertDialogFooter>
