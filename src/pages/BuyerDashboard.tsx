@@ -60,6 +60,8 @@ const BuyerDashboard = () => {
   const [loadingData, setLoadingData] = useState(true);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [isShowingModalOpen, setIsShowingModalOpen] = useState(false);
+  const [selectedForComparison, setSelectedForComparison] = useState<Set<string>>(new Set());
+  const [isComparisonMode, setIsComparisonMode] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -258,6 +260,24 @@ const BuyerDashboard = () => {
     return `${hours}h ${minutes}m remaining`;
   };
 
+  const toggleComparisonSelection = (reportId: string) => {
+    const newSelection = new Set(selectedForComparison);
+    if (newSelection.has(reportId)) {
+      newSelection.delete(reportId);
+    } else if (newSelection.size < 4) {
+      newSelection.add(reportId);
+    }
+    setSelectedForComparison(newSelection);
+  };
+
+  const getSelectedReports = () => {
+    return reports.filter(report => selectedForComparison.has(report.id));
+  };
+
+  const clearComparison = () => {
+    setSelectedForComparison(new Set());
+  };
+
   if (loading || loadingData) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -291,10 +311,14 @@ const BuyerDashboard = () => {
 
       <div className="container mx-auto px-4 py-8">
         <Tabs defaultValue="reports" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="reports" className="flex items-center gap-2">
               <FileText className="w-4 h-4" />
               My Reports
+            </TabsTrigger>
+            <TabsTrigger value="compare" className="flex items-center gap-2">
+              <Search className="w-4 h-4" />
+              Compare Properties
             </TabsTrigger>
             <TabsTrigger value="showings" className="flex items-center gap-2">
               <Calendar className="w-4 h-4" />
@@ -395,6 +419,185 @@ const BuyerDashboard = () => {
                       </CardContent>
                     </Card>
                   ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="compare" className="mt-6">
+            <div className="grid gap-6">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-xl font-semibold">Compare Properties</h2>
+                  <p className="text-muted-foreground">Select up to 4 properties to compare their disclosure reports</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary">{selectedForComparison.size}/4 Selected</Badge>
+                  {selectedForComparison.size > 0 && (
+                    <Button variant="outline" size="sm" onClick={clearComparison}>
+                      Clear Selection
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {reports.length === 0 ? (
+                <Card>
+                  <CardContent className="pt-6 text-center">
+                    <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                    <h3 className="text-lg font-semibold mb-2">No Reports Available</h3>
+                    <p className="text-muted-foreground mb-4">
+                      You need at least 2 property reports to use the comparison feature.
+                    </p>
+                    <Button onClick={() => navigate('/')}>
+                      Search Properties
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : selectedForComparison.size === 0 ? (
+                <div>
+                  <p className="text-muted-foreground mb-4">Select properties to compare:</p>
+                  <div className="grid gap-4">
+                    {reports.map((report) => (
+                      <Card key={report.id} className="cursor-pointer hover:bg-accent/50 transition-colors">
+                        <CardContent className="pt-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <input
+                                type="checkbox"
+                                checked={selectedForComparison.has(report.id)}
+                                onChange={() => toggleComparisonSelection(report.id)}
+                                className="w-4 h-4"
+                                disabled={!selectedForComparison.has(report.id) && selectedForComparison.size >= 4}
+                              />
+                              <div>
+                                <h3 className="font-medium">{report.properties.full_address}</h3>
+                                <p className="text-sm text-muted-foreground">
+                                  Risk Score: {report.risk_score}/10
+                                </p>
+                              </div>
+                            </div>
+                            <Badge variant={report.risk_score > 7 ? "destructive" : report.risk_score > 5 ? "secondary" : "default"}>
+                              Risk: {report.risk_score}/10
+                            </Badge>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div className="mb-6">
+                    <h3 className="text-lg font-medium mb-2">Selected Properties for Comparison</h3>
+                    <div className="grid gap-4">
+                      {reports.map((report) => (
+                        <Card key={report.id} className="cursor-pointer hover:bg-accent/50 transition-colors">
+                          <CardContent className="pt-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-4">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedForComparison.has(report.id)}
+                                  onChange={() => toggleComparisonSelection(report.id)}
+                                  className="w-4 h-4"
+                                  disabled={!selectedForComparison.has(report.id) && selectedForComparison.size >= 4}
+                                />
+                                <div>
+                                  <h3 className="font-medium">{report.properties.full_address}</h3>
+                                  <p className="text-sm text-muted-foreground">
+                                    Risk Score: {report.risk_score}/10
+                                  </p>
+                                </div>
+                              </div>
+                              <Badge variant={report.risk_score > 7 ? "destructive" : report.risk_score > 5 ? "secondary" : "default"}>
+                                Risk: {report.risk_score}/10
+                              </Badge>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+
+                  {selectedForComparison.size >= 2 && (
+                    <div>
+                      <h3 className="text-lg font-medium mb-4">Property Comparison</h3>
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                          <thead>
+                            <tr className="border-b">
+                              <th className="text-left p-4 font-medium">Property</th>
+                              {getSelectedReports().map((report) => (
+                                <th key={report.id} className="text-left p-4 font-medium min-w-[200px]">
+                                  <div>
+                                    <div className="font-medium">{report.properties.full_address}</div>
+                                    <div className="text-sm text-muted-foreground">{report.properties.city}, {report.properties.state}</div>
+                                  </div>
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr className="border-b">
+                              <td className="p-4 font-medium">Risk Score</td>
+                              {getSelectedReports().map((report) => (
+                                <td key={report.id} className="p-4">
+                                  <Badge variant={report.risk_score > 7 ? "destructive" : report.risk_score > 5 ? "secondary" : "default"}>
+                                    {report.risk_score}/10
+                                  </Badge>
+                                </td>
+                              ))}
+                            </tr>
+                            <tr className="border-b">
+                              <td className="p-4 font-medium">Report Summary</td>
+                              {getSelectedReports().map((report) => (
+                                <td key={report.id} className="p-4">
+                                  <p className="text-sm text-muted-foreground line-clamp-3">
+                                    {report.report_summary_basic}
+                                  </p>
+                                </td>
+                              ))}
+                            </tr>
+                            <tr className="border-b">
+                              <td className="p-4 font-medium">Purchase Date</td>
+                              {getSelectedReports().map((report) => (
+                                <td key={report.id} className="p-4">
+                                  <p className="text-sm">
+                                    {new Date(report.created_at).toLocaleDateString()}
+                                  </p>
+                                </td>
+                              ))}
+                            </tr>
+                            <tr>
+                              <td className="p-4 font-medium">Actions</td>
+                              {getSelectedReports().map((report) => (
+                                <td key={report.id} className="p-4">
+                                  <div className="flex flex-col gap-2">
+                                    <Button 
+                                      size="sm" 
+                                      onClick={() => viewReport(report.id, report.property_id)}
+                                    >
+                                      <Eye className="w-4 h-4 mr-2" />
+                                      View Report
+                                    </Button>
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline"
+                                      onClick={() => handlePropertySelect(report.properties)}
+                                    >
+                                      <Calendar className="w-4 h-4 mr-2" />
+                                      Request Showing
+                                    </Button>
+                                  </div>
+                                </td>
+                              ))}
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
