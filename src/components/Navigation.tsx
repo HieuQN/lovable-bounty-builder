@@ -1,22 +1,35 @@
 import { Button } from '@/components/ui/button';
+import { Link, useLocation } from 'react-router-dom';
+import { Home, Users, FileText } from 'lucide-react';
 
 const Navigation = () => {
+  const location = useLocation();
+  
   return (
-    <nav className="border-b bg-background">
-      <div className="container mx-auto px-4 py-3 flex justify-between items-center">
-        <div className="flex items-center space-x-8">
-          <h1 className="text-xl font-bold">IntelleHouse</h1>
-          <div className="flex space-x-4">
-            <Button variant="ghost" size="sm">Dashboard</Button>
-            <Button variant="ghost" size="sm">Bounties</Button>
-            <Button variant="ghost" size="sm">Reports</Button>
-          </div>
-        </div>
-        
+    <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+        <Link to="/" className="font-bold text-xl text-primary hover:text-primary/80 transition-colors">
+          InsightHome
+        </Link>
         <div className="flex items-center space-x-4">
-          <span className="text-sm text-muted-foreground">
-            Demo Mode
-          </span>
+          <Button 
+            variant={location.pathname === '/' ? 'default' : 'ghost'} 
+            asChild
+          >
+            <Link to="/">
+              <Home className="w-4 h-4 mr-2" />
+              Home
+            </Link>
+          </Button>
+          <Button 
+            variant={location.pathname === '/agent-dashboard' ? 'default' : 'ghost'} 
+            asChild
+          >
+            <Link to="/agent-dashboard">
+              <Users className="w-4 h-4 mr-2" />
+              Agent Portal
+            </Link>
+          </Button>
         </div>
       </div>
     </nav>
