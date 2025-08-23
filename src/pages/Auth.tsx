@@ -6,12 +6,13 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { CreateDemoUser } from '@/components/CreateDemoUser';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Eye, EyeOff, UserIcon, Briefcase } from 'lucide-react';
+import { Eye, EyeOff, UserIcon, Briefcase, Mail } from 'lucide-react';
 
 const Auth = () => {
   const { user, signIn, signUp, loading } = useAuth();
@@ -20,6 +21,8 @@ const Auth = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [userType, setUserType] = useState<'Buyer' | 'Agent'>('Buyer');
+  const [showResendModal, setShowResendModal] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState('');
 
   useEffect(() => {
     if (user && !loading) {
@@ -90,7 +93,9 @@ const Auth = () => {
         if (error.message.includes('Invalid login credentials')) {
           setError('Invalid email or password. Please check your credentials and try again.');
         } else if (error.message.includes('Email not confirmed')) {
-          setError('Please check your email and click the confirmation link to activate your account.');
+          setPendingEmail(email);
+          setShowResendModal(true);
+          return;
         } else {
           setError(error.message);
         }
@@ -166,6 +171,34 @@ const Auth = () => {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: pendingEmail,
+        options: {
+          emailRedirectTo: `${window.location.origin}/confirm-email`
+        }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Verification email sent!",
+        description: "Please check your email for the verification link.",
+      });
+      
+      setShowResendModal(false);
+      setPendingEmail('');
+    } catch (error: any) {
+      toast({
+        title: "Failed to send verification email",
+        description: error.message,
+        variant: "destructive",
+      });
     }
   };
 
@@ -369,6 +402,32 @@ const Auth = () => {
           <CreateDemoUser />
         </div>
       </div>
+
+      {/* Resend Verification Modal */}
+      <AlertDialog open={showResendModal} onOpenChange={setShowResendModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Mail className="w-5 h-5" />
+              Email Verification Required
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Your account exists but hasn't been verified yet. We can send you a new verification email to <strong>{pendingEmail}</strong>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowResendModal(false)}
+            >
+              Cancel
+            </Button>
+            <AlertDialogAction onClick={handleResendVerification}>
+              Resend Verification Email
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
