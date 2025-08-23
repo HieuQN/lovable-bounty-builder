@@ -7,6 +7,7 @@ import { Search, Shield, TrendingUp, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
+import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 
 const Home = () => {
   const [address, setAddress] = useState('');
@@ -93,12 +94,16 @@ const Home = () => {
             <CardContent className="pt-6">
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="flex-1">
-                  <Input
-                    placeholder="Try: 123 Main Street, 456 Oak Avenue, or 789 Pine Road"
+                  <AddressAutocomplete
                     value={address}
-                    onChange={(e) => setAddress(e.target.value)}
+                    onChange={setAddress}
+                    onAddressSelect={(addressDetails) => {
+                      setAddress(addressDetails.full_address);
+                      // Auto-trigger analysis when address is selected
+                      setTimeout(() => handleAnalyze(), 100);
+                    }}
+                    placeholder="Enter a property address to analyze..."
                     className="text-lg h-12"
-                    onKeyPress={(e) => e.key === 'Enter' && handleAnalyze()}
                   />
                 </div>
                 <Button 

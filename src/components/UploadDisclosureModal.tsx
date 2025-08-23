@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
 import { Upload, MapPin, Coins, AlertCircle } from 'lucide-react';
+import { AddressAutocomplete } from './AddressAutocomplete';
 
 interface UploadDisclosureModalProps {
   isOpen: boolean;
@@ -28,21 +29,20 @@ export const UploadDisclosureModal = ({
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
   const [zipCode, setZipCode] = useState('');
+  const [fullAddress, setFullAddress] = useState('');
   const [notes, setNotes] = useState('');
   const [existingDisclosure, setExistingDisclosure] = useState<any>(null);
   const [checkingExisting, setCheckingExisting] = useState(false);
 
   const checkForExistingDisclosure = async () => {
-    if (!address || !city || !state) return;
+    if (!fullAddress) return;
     
     setCheckingExisting(true);
     try {
       const { data: properties, error: propError } = await supabase
         .from('properties')
         .select('id')
-        .ilike('full_address', `%${address}%`)
-        .ilike('city', `%${city}%`)
-        .ilike('state', `%${state}%`);
+        .ilike('full_address', `%${fullAddress}%`);
 
       if (propError) throw propError;
 
@@ -85,10 +85,10 @@ export const UploadDisclosureModal = ({
   };
 
   const handleSubmit = async () => {
-    if (!file || !address || !city || !state || !zipCode) {
+    if (!file || !fullAddress) {
       toast({
         title: "Missing Information",
-        description: "Please fill in all required fields and select a file",
+        description: "Please select a file and enter a complete address",
         variant: "destructive",
       });
       return;
@@ -116,8 +116,6 @@ export const UploadDisclosureModal = ({
       if (agentError) throw agentError;
 
       // Create or get property
-      const fullAddress = `${address}, ${city}, ${state} ${zipCode}`;
-      
       let propertyId;
       const { data: existingProperty } = await supabase
         .from('properties')
@@ -205,48 +203,21 @@ export const UploadDisclosureModal = ({
 
         <div className="space-y-6">
           {/* Property Information */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="address">Street Address *</Label>
-              <Input
-                id="address"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                onBlur={checkForExistingDisclosure}
-                placeholder="123 Main Street"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="city">City *</Label>
-              <Input
-                id="city"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                onBlur={checkForExistingDisclosure}
-                placeholder="Anytown"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="state">State *</Label>
-              <Input
-                id="state"
-                value={state}
-                onChange={(e) => setState(e.target.value)}
-                onBlur={checkForExistingDisclosure}
-                placeholder="CT"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="zipCode">Zip Code *</Label>
-              <Input
-                id="zipCode"
-                value={zipCode}
-                onChange={(e) => setZipCode(e.target.value)}
-                placeholder="06810"
-                required
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="address">Property Address *</Label>
+              <AddressAutocomplete
+                value={fullAddress}
+                onChange={setFullAddress}
+                onAddressSelect={(addressDetails) => {
+                  setFullAddress(addressDetails.full_address);
+                  setAddress(addressDetails.street_address);
+                  setCity(addressDetails.city);
+                  setState(addressDetails.state);
+                  setZipCode(addressDetails.zip_code);
+                }}
+                placeholder="Start typing a US address..."
+                className="mt-1"
               />
             </div>
           </div>
@@ -277,7 +248,7 @@ export const UploadDisclosureModal = ({
             </Card>
           )}
 
-          {!existingDisclosure && address && city && state && !checkingExisting && (
+          {!existingDisclosure && fullAddress && !checkingExisting && (
             <Card className="border-green-200 bg-green-50">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-2 text-green-700">
