@@ -16,18 +16,57 @@ const Home = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleAnalyze = async (addressToAnalyze?: string) => {
+  const handleSearch = async (addressToAnalyze?: string) => {
     const targetAddress = addressToAnalyze || address;
     
     if (!targetAddress.trim()) {
       toast({
         title: "Address Required",
-        description: "Please enter a property address to analyze",
+        description: "Please enter a property address to search",
         variant: "destructive",
       });
       return;
     }
 
+    setLoading(true);
+    
+    try {
+      // Search for existing property and disclosure report
+      const { data: existingProperty, error: searchError } = await supabase
+        .from('properties')
+        .select(`
+          *,
+          disclosure_reports!inner(
+            id,
+            status,
+            report_summary_basic,
+            risk_score,
+            created_at
+          )
+        `)
+        .ilike('full_address', `%${targetAddress.trim()}%`)
+        .eq('disclosure_reports.status', 'complete')
+        .single();
+
+      if (existingProperty && existingProperty.disclosure_reports?.length > 0) {
+        // Navigate to existing analysis
+        navigate(`/analyze/${existingProperty.id}`);
+      } else {
+        // No existing analysis, show request form
+        navigate(`/analyze/new?address=${encodeURIComponent(targetAddress)}`);
+      }
+    } catch (error) {
+      console.error('Error searching property:', error);
+      // If no existing analysis found, show request form
+      navigate(`/analyze/new?address=${encodeURIComponent(targetAddress)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRequestAnalysis = async (addressToAnalyze?: string) => {
+    const targetAddress = addressToAnalyze || address;
+    
     // Check if user is authenticated
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -43,23 +82,17 @@ const Home = () => {
     setLoading(true);
     
     try {
-      // First try to find existing property by searching for similar addresses
+      // Create or find property
+      let propertyId;
       const { data: existingProperty, error: searchError } = await supabase
         .from('properties')
         .select('*')
         .ilike('full_address', `%${targetAddress.trim()}%`)
         .single();
 
-      if (searchError && searchError.code !== 'PGRST116') {
-        throw searchError;
-      }
-
-      let propertyId;
-
       if (existingProperty) {
         propertyId = existingProperty.id;
       } else {
-        // Create new property with structured address data if available
         const insertData = addressDetails ? {
           full_address: targetAddress.trim(),
           street_address: addressDetails.street_address || targetAddress.trim(),
@@ -84,7 +117,7 @@ const Home = () => {
         propertyId = newProperty.id;
       }
 
-      // Create disclosure bounty for the property
+      // Create disclosure bounty
       const { error: bountyError } = await supabase
         .from('disclosure_bounties')
         .insert({
@@ -145,14 +178,14 @@ const Home = () => {
                       onAddressSelect={(addressDetails) => {
                         setAddress(addressDetails.full_address);
                         setAddressDetails(addressDetails);
-                        handleAnalyze(addressDetails.full_address);
+                        handleSearch(addressDetails.full_address);
                       }}
                       placeholder="Enter a property address to analyze..."
                       className="text-lg h-14 border-0 bg-background/50 backdrop-blur-sm"
                     />
                   </div>
                   <Button 
-                    onClick={() => handleAnalyze()}
+                    onClick={() => handleSearch()}
                     disabled={loading}
                     size="lg"
                     className="h-14 px-10 btn-primary text-lg font-semibold"
@@ -160,12 +193,12 @@ const Home = () => {
                     {loading ? (
                       <>
                         <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
-                        Analyzing...
+                        Searching...
                       </>
                     ) : (
                       <>
                         <Search className="w-5 h-5 mr-3" />
-                        Analyze Property
+                        Search Property
                       </>
                     )}
                   </Button>
