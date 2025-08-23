@@ -529,22 +529,47 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
               <TabsTrigger value="disclosures" className="flex items-center gap-2">
                 <FileText className="w-4 h-4" />
                 My Disclosures
+                {myDisclosures.length > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-5 text-xs">
+                    {myDisclosures.length}
+                  </Badge>
+                )}
               </TabsTrigger>
               <TabsTrigger value="showings" className="flex items-center gap-2">
                 <Calendar className="w-4 h-4" />
                 Upcoming Showings
+                {upcomingShowings.length > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-5 text-xs">
+                    {upcomingShowings.length}
+                  </Badge>
+                )}
               </TabsTrigger>
               <TabsTrigger value="transactions" className="flex items-center gap-2">
                 <Coins className="w-4 h-4" />
                 Credit History
+                {creditTransactions.length > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-5 text-xs">
+                    {creditTransactions.length}
+                  </Badge>
+                )}
               </TabsTrigger>
               <TabsTrigger value="bounties" className="flex items-center gap-2">
                 <Upload className="w-4 h-4" />
                 Disclosure Bounties
+                {bounties.length > 0 && (
+                  <Badge variant="default" className="ml-1 h-5 text-xs bg-green-600 hover:bg-green-700">
+                    {bounties.length}
+                  </Badge>
+                )}
               </TabsTrigger>
               <TabsTrigger value="showing-bids" className="flex items-center gap-2">
                 <Gavel className="w-4 h-4" />
                 Showing Requests
+                {showingRequests.length > 0 && (
+                  <Badge variant="default" className="ml-1 h-5 text-xs bg-blue-600 hover:bg-blue-700">
+                    {showingRequests.length}
+                  </Badge>
+                )}
               </TabsTrigger>
             </TabsList>
 
