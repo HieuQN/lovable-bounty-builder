@@ -8,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
 import { ShowingRequestModal } from '@/components/ShowingRequestModal';
-import { LogOut, FileText, Search, Download, Eye, Calendar, Coins, Clock } from 'lucide-react';
+import { LogOut, FileText, Search, Download, Eye, Calendar, Coins, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 
 interface Property {
   id: string;
@@ -44,6 +44,9 @@ interface ShowingRequest {
   created_at: string;
   winning_bid_amount?: number;
   selected_time_slot?: string;
+  confirmation_status?: string;
+  agent_confirmed_at?: string;
+  buyer_confirmed_at?: string;
   properties?: Property;
 }
 
@@ -178,6 +181,34 @@ const BuyerDashboard = () => {
 
   const handleRequestSuccess = () => {
     fetchUserData(); // Refresh data after successful request
+  };
+
+  const confirmShowing = async (showingId: string) => {
+    try {
+      const { error } = await supabase
+        .from('showing_requests')
+        .update({
+          confirmation_status: 'buyer_confirmed',
+          buyer_confirmed_at: new Date().toISOString()
+        })
+        .eq('id', showingId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Showing Confirmed",
+        description: "You've confirmed this showing. Agent will receive credits once both parties confirm.",
+      });
+
+      fetchUserData();
+    } catch (error) {
+      console.error('Error confirming showing:', error);
+      toast({
+        title: "Error",
+        description: "Failed to confirm showing. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -395,26 +426,57 @@ const BuyerDashboard = () => {
                           </div>
                         </div>
                       </CardHeader>
-                      <CardContent>
-                        <div className="flex justify-between items-center">
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <div className="flex items-center gap-1">
-                              <Coins className="w-4 h-4" />
-                              <span>{request.credits_spent} Credits</span>
-                            </div>
-                            {request.winning_bid_amount && (
-                              <div>
-                                Winning Bid: {request.winning_bid_amount} Credits
-                              </div>
-                            )}
-                          </div>
-                          {request.selected_time_slot && (
-                            <Badge variant="outline">
-                              {request.selected_time_slot}
-                            </Badge>
-                          )}
-                        </div>
-                      </CardContent>
+                       <CardContent>
+                         <div className="space-y-4">
+                           <div className="flex justify-between items-center">
+                             <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                               <div className="flex items-center gap-1">
+                                 <Coins className="w-4 h-4" />
+                                 <span>{request.credits_spent} Credits</span>
+                               </div>
+                               {request.winning_bid_amount && (
+                                 <div>
+                                   Winning Bid: {request.winning_bid_amount} Credits
+                                 </div>
+                               )}
+                             </div>
+                             {request.selected_time_slot && (
+                               <Badge variant="outline">
+                                 {request.selected_time_slot}
+                               </Badge>
+                             )}
+                           </div>
+                           
+                           {(request.status === 'awarded' || request.status === 'confirmed') && (
+                             <div className="space-y-2">
+                               <div className="flex items-center text-sm">
+                                 {request.confirmation_status === 'both_confirmed' ? (
+                                   <CheckCircle className="w-4 h-4 mr-2 text-green-500" />
+                                 ) : request.confirmation_status === 'buyer_confirmed' ? (
+                                   <AlertCircle className="w-4 h-4 mr-2 text-orange-500" />
+                                 ) : (
+                                   <Clock className="w-4 h-4 mr-2 text-gray-500" />
+                                 )}
+                                 {request.confirmation_status === 'both_confirmed' 
+                                   ? 'Both parties confirmed' 
+                                   : request.confirmation_status === 'buyer_confirmed'
+                                   ? 'Waiting for agent confirmation'
+                                   : 'Pending confirmation'}
+                               </div>
+                               {request.confirmation_status !== 'buyer_confirmed' && request.confirmation_status !== 'both_confirmed' && (
+                                 <Button 
+                                   size="sm" 
+                                   onClick={() => confirmShowing(request.id)}
+                                   className="w-full"
+                                 >
+                                   <CheckCircle className="w-4 h-4 mr-2" />
+                                   Confirm Showing Completed
+                                 </Button>
+                               )}
+                             </div>
+                           )}
+                         </div>
+                       </CardContent>
                     </Card>
                   ))}
                 </div>

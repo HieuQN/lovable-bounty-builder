@@ -10,7 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { ShowingBidModal } from '@/components/ShowingBidModal';
 import { UploadDisclosureModal } from '@/components/UploadDisclosureModal';
-import { Coins, MapPin, Calendar, Upload, LogOut, Clock, Gavel, FileText, Eye, Download } from 'lucide-react';
+import { Coins, MapPin, Calendar, Upload, LogOut, Clock, Gavel, FileText, Eye, Download, CheckCircle, AlertCircle } from 'lucide-react';
 
 interface AgentDashboardProps {
   onLogout?: () => void;
@@ -50,11 +50,24 @@ interface UpcomingShowing {
   winning_bid_amount?: number;
   selected_time_slot?: string;
   created_at: string;
+  confirmation_status?: string;
+  agent_confirmed_at?: string;
+  buyer_confirmed_at?: string;
   properties?: {
     full_address: string;
     city: string;
     state: string;
   };
+}
+
+interface CreditTransaction {
+  id: string;
+  amount: number;
+  transaction_type: string;
+  description: string;
+  created_at: string;
+  related_showing_id?: string;
+  related_disclosure_id?: string;
 }
 
 interface ShowingRequest {
@@ -80,6 +93,7 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
   const [showingRequests, setShowingRequests] = useState<ShowingRequest[]>([]);
   const [myDisclosures, setMyDisclosures] = useState<DisclosureReport[]>([]);
   const [upcomingShowings, setUpcomingShowings] = useState<UpcomingShowing[]>([]);
+  const [creditTransactions, setCreditTransactions] = useState<CreditTransaction[]>([]);
   const [selectedShowingRequest, setSelectedShowingRequest] = useState<ShowingRequest | null>(null);
   const [isBidModalOpen, setIsBidModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -95,7 +109,8 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
         fetchBounties(),
         fetchShowingRequests(),
         fetchMyDisclosures(),
-        fetchUpcomingShowings()
+        fetchUpcomingShowings(),
+        fetchCreditTransactions()
       ]).finally(() => {
         setLoading(false);
       });
@@ -256,6 +271,59 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
       setUpcomingShowings(data || []);
     } catch (error) {
       console.error('Error fetching upcoming showings:', error);
+    }
+  };
+
+  const fetchCreditTransactions = async () => {
+    try {
+      const { data: agentProfile } = await supabase
+        .from('agent_profiles')
+        .select('id')
+        .eq('user_id', user?.id)
+        .single();
+
+      if (!agentProfile) return;
+
+      const { data, error } = await supabase
+        .from('credit_transactions')
+        .select('*')
+        .eq('agent_profile_id', agentProfile.id)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+      setCreditTransactions(data || []);
+    } catch (error) {
+      console.error('Error fetching credit transactions:', error);
+    }
+  };
+
+  const confirmShowing = async (showingId: string) => {
+    try {
+      const { error } = await supabase
+        .from('showing_requests')
+        .update({
+          confirmation_status: 'agent_confirmed',
+          agent_confirmed_at: new Date().toISOString()
+        })
+        .eq('id', showingId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Showing Confirmed",
+        description: "You've confirmed this showing. Waiting for buyer confirmation to earn credits.",
+      });
+
+      fetchUpcomingShowings();
+      fetchCreditTransactions();
+    } catch (error) {
+      console.error('Error confirming showing:', error);
+      toast({
+        title: "Error",
+        description: "Failed to confirm showing. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -438,7 +506,7 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
 
           {/* Available Work Tabs */}
           <Tabs defaultValue="disclosures" className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="disclosures" className="flex items-center gap-2">
                 <FileText className="w-4 h-4" />
                 My Disclosures
@@ -446,6 +514,10 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
               <TabsTrigger value="showings" className="flex items-center gap-2">
                 <Calendar className="w-4 h-4" />
                 Upcoming Showings
+              </TabsTrigger>
+              <TabsTrigger value="transactions" className="flex items-center gap-2">
+                <Coins className="w-4 h-4" />
+                Credit History
               </TabsTrigger>
               <TabsTrigger value="bounties" className="flex items-center gap-2">
                 <Upload className="w-4 h-4" />
@@ -569,28 +641,119 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
                         </div>
                       </CardHeader>
                       <CardContent>
-                        <div className="space-y-4">
-                          <div className="flex items-center text-sm text-muted-foreground">
-                            <Calendar className="w-4 h-4 mr-2" />
-                            Won on: {new Date(showing.created_at).toLocaleDateString()}
-                          </div>
-                          {showing.selected_time_slot && (
-                            <div className="flex items-center text-sm font-medium text-blue-600">
-                              <Clock className="w-4 h-4 mr-2" />
-                              {showing.selected_time_slot}
-                            </div>
-                          )}
-                          {showing.winning_bid_amount && (
-                            <div className="flex items-center text-sm text-orange-600">
-                              <Coins className="w-4 h-4 mr-2" />
-                              Paid: {showing.winning_bid_amount} Credits
-                            </div>
-                          )}
-                        </div>
+                         <div className="space-y-4">
+                           <div className="flex items-center text-sm text-muted-foreground">
+                             <Calendar className="w-4 h-4 mr-2" />
+                             Won on: {new Date(showing.created_at).toLocaleDateString()}
+                           </div>
+                           {showing.selected_time_slot && (
+                             <div className="flex items-center text-sm font-medium text-blue-600">
+                               <Clock className="w-4 h-4 mr-2" />
+                               {showing.selected_time_slot}
+                             </div>
+                           )}
+                           {showing.winning_bid_amount && (
+                             <div className="flex items-center text-sm text-orange-600">
+                               <Coins className="w-4 h-4 mr-2" />
+                               Paid: {showing.winning_bid_amount} Credits
+                             </div>
+                           )}
+                           <div className="space-y-2">
+                             <div className="flex items-center text-sm">
+                               {showing.confirmation_status === 'both_confirmed' ? (
+                                 <CheckCircle className="w-4 h-4 mr-2 text-green-500" />
+                               ) : showing.confirmation_status === 'agent_confirmed' ? (
+                                 <AlertCircle className="w-4 h-4 mr-2 text-orange-500" />
+                               ) : (
+                                 <Clock className="w-4 h-4 mr-2 text-gray-500" />
+                               )}
+                               {showing.confirmation_status === 'both_confirmed' 
+                                 ? 'Both parties confirmed' 
+                                 : showing.confirmation_status === 'agent_confirmed'
+                                 ? 'Waiting for buyer confirmation'
+                                 : 'Pending confirmation'}
+                             </div>
+                             {showing.confirmation_status !== 'agent_confirmed' && showing.confirmation_status !== 'both_confirmed' && (
+                               <Button 
+                                 size="sm" 
+                                 onClick={() => confirmShowing(showing.id)}
+                                 className="w-full"
+                               >
+                                 <CheckCircle className="w-4 h-4 mr-2" />
+                                 Confirm Showing Completed
+                               </Button>
+                             )}
+                           </div>
+                         </div>
                       </CardContent>
                     </Card>
                   ))}
                 </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="transactions" className="mt-6">
+              <h2 className="text-2xl font-semibold mb-4">Credit Transaction History</h2>
+              
+              {creditTransactions.length === 0 ? (
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center py-8">
+                      <Coins className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold mb-2">No transactions yet</h3>
+                      <p className="text-muted-foreground">
+                        Your credit earning history will appear here
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardContent className="p-0">
+                    <div className="space-y-0">
+                      {creditTransactions.map((transaction, index) => (
+                        <div 
+                          key={transaction.id} 
+                          className={`p-4 ${index !== creditTransactions.length - 1 ? 'border-b' : ''}`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                {transaction.transaction_type === 'disclosure_upload' ? (
+                                  <FileText className="w-4 h-4 text-green-500" />
+                                ) : transaction.transaction_type === 'showing_win' ? (
+                                  <CheckCircle className="w-4 h-4 text-blue-500" />
+                                ) : transaction.transaction_type === 'showing_deduction' ? (
+                                  <AlertCircle className="w-4 h-4 text-orange-500" />
+                                ) : (
+                                  <Coins className="w-4 h-4 text-gray-500" />
+                                )}
+                                <span className="font-medium text-sm">
+                                  {transaction.transaction_type.replace('_', ' ').toUpperCase()}
+                                </span>
+                              </div>
+                              <p className="text-sm text-muted-foreground">
+                                {transaction.description}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {new Date(transaction.created_at).toLocaleString()}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <span 
+                                className={`font-semibold ${
+                                  transaction.amount > 0 ? 'text-green-600' : 'text-red-600'
+                                }`}
+                              >
+                                {transaction.amount > 0 ? '+' : ''}{transaction.amount} credits
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
               )}
             </TabsContent>
 
