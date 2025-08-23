@@ -480,36 +480,45 @@ const BuyerDashboard = () => {
                                    ? 'You confirmed - Waiting for agent'
                                    : 'Pending confirmation'}
                                </div>
-                               {request.confirmation_status === 'pending' ? (
-                                 <Button 
-                                   size="sm" 
-                                   onClick={() => confirmShowing(request.id)}
-                                   className="w-full"
-                                 >
-                                   <CheckCircle className="w-4 h-4 mr-2" />
-                                   Confirm Showing Completed
-                                 </Button>
-                               ) : request.confirmation_status === 'buyer_confirmed' ? (
-                                 <Button 
-                                   size="sm" 
-                                   variant="outline"
-                                   className="w-full bg-green-50 text-green-700 border-green-200"
-                                   disabled
-                                 >
-                                   <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
-                                   You Confirmed
-                                 </Button>
-                               ) : (
-                                 <Button 
-                                   size="sm" 
-                                   variant="outline"
-                                   className="w-full bg-green-50 text-green-700 border-green-200"
-                                   disabled
-                                 >
-                                   <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
-                                   Completed
-                                 </Button>
-                               )}
+                                {request.confirmation_status === 'pending' ? (
+                                  <Button 
+                                    size="sm" 
+                                    onClick={() => confirmShowing(request.id)}
+                                    className="w-full"
+                                  >
+                                    <CheckCircle className="w-4 h-4 mr-2" />
+                                    Confirm Showing Completed
+                                  </Button>
+                                ) : request.confirmation_status === 'buyer_confirmed' ? (
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline"
+                                    className="w-full bg-yellow-50 text-yellow-700 border-yellow-200"
+                                    disabled
+                                  >
+                                    <Clock className="w-4 h-4 mr-2 text-yellow-600" />
+                                    Waiting for Agent
+                                  </Button>
+                                ) : request.confirmation_status === 'agent_confirmed' ? (
+                                  <Button 
+                                    size="sm" 
+                                    onClick={() => confirmShowing(request.id)}
+                                    className="w-full bg-blue-600 hover:bg-blue-700"
+                                  >
+                                    <CheckCircle className="w-4 h-4 mr-2" />
+                                    Confirm (Agent Ready!)
+                                  </Button>
+                                ) : (
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline"
+                                    className="w-full bg-green-50 text-green-700 border-green-200"
+                                    disabled
+                                  >
+                                    <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
+                                    Completed & Credits Awarded
+                                  </Button>
+                                )}
                              </div>
                            )}
                          </div>
