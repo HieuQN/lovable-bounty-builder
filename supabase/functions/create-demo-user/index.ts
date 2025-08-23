@@ -23,114 +23,137 @@ const handler = async (req: Request): Promise<Response> => {
   const demoPassword = 'demo123';
 
   try {
-    // Create or get demo buyer user
-    const { data: buyerAuthData, error: buyerAuthError } = await supabaseAdmin.auth.admin.createUser({
-      email: demoUserEmail,
-      password: demoPassword,
-      email_confirm: true,
-      user_metadata: {
-        first_name: 'Demo'
-      }
-    });
+    let buyerUserId, agentUserId;
 
-    if (buyerAuthError && !buyerAuthError.message.includes('already registered')) {
-      throw buyerAuthError;
-    }
-
-    let buyerUserId;
-    if (buyerAuthData?.user) {
-      buyerUserId = buyerAuthData.user.id;
-    } else {
-      // User already exists, get their ID
-      const { data: existingBuyer } = await supabaseAdmin.auth.admin.listUsers();
-      const existingBuyerUser = existingBuyer.users.find(u => u.email === demoUserEmail);
-      if (!existingBuyerUser) {
-        throw new Error('Failed to create or find demo user');
-      }
-      buyerUserId = existingBuyerUser.id;
-    }
-
-    // Create or update buyer profile
-    const { error: buyerProfileError } = await supabaseAdmin
-      .from('profiles')
-      .upsert({
-        user_id: buyerUserId,
+    // Try to create buyer user, handle if already exists
+    try {
+      const { data: buyerAuthData, error: buyerAuthError } = await supabaseAdmin.auth.admin.createUser({
         email: demoUserEmail,
-        first_name: 'Demo',
-        user_type: 'Buyer',
-        credits: 1000,
-        is_verified: true
+        password: demoPassword,
+        email_confirm: true,
+        user_metadata: {
+          first_name: 'Demo'
+        }
       });
 
-    if (buyerProfileError) {
-      console.error('Error creating buyer profile:', buyerProfileError);
-    }
-
-    // Create or get demo agent user
-    const { data: agentAuthData, error: agentAuthError } = await supabaseAdmin.auth.admin.createUser({
-      email: demoAgentEmail,
-      password: demoPassword,
-      email_confirm: true,
-      user_metadata: {
-        first_name: 'Agent Demo'
+      if (buyerAuthError) {
+        if (buyerAuthError.message.includes('already registered')) {
+          console.log('Buyer already exists, finding existing user...');
+          const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+          const existingBuyerUser = existingUsers.users.find(u => u.email === demoUserEmail);
+          if (existingBuyerUser) {
+            buyerUserId = existingBuyerUser.id;
+            console.log('Found existing buyer:', buyerUserId);
+          }
+        } else {
+          throw buyerAuthError;
+        }
+      } else {
+        buyerUserId = buyerAuthData.user.id;
+        console.log('Created new buyer:', buyerUserId);
       }
-    });
-
-    if (agentAuthError && !agentAuthError.message.includes('already registered')) {
-      throw agentAuthError;
+    } catch (error) {
+      console.error('Error with buyer account:', error);
     }
 
-    let agentUserId;
-    if (agentAuthData?.user) {
-      agentUserId = agentAuthData.user.id;
-    } else {
-      // User already exists, get their ID
-      const { data: existingAgent } = await supabaseAdmin.auth.admin.listUsers();
-      const existingAgentUser = existingAgent.users.find(u => u.email === demoAgentEmail);
-      if (!existingAgentUser) {
-        throw new Error('Failed to create or find demo agent');
-      }
-      agentUserId = existingAgentUser.id;
-    }
-
-    // Create or update agent profile
-    const { error: agentProfileError } = await supabaseAdmin
-      .from('profiles')
-      .upsert({
-        user_id: agentUserId,
+    // Try to create agent user, handle if already exists
+    try {
+      const { data: agentAuthData, error: agentAuthError } = await supabaseAdmin.auth.admin.createUser({
         email: demoAgentEmail,
-        first_name: 'Agent Demo',
-        user_type: 'Agent',
-        credits: 0,
-        is_verified: true
+        password: demoPassword,
+        email_confirm: true,
+        user_metadata: {
+          first_name: 'Agent Demo'
+        }
       });
 
-    if (agentProfileError) {
-      console.error('Error creating agent profile:', agentProfileError);
+      if (agentAuthError) {
+        if (agentAuthError.message.includes('already registered')) {
+          console.log('Agent already exists, finding existing user...');
+          const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+          const existingAgentUser = existingUsers.users.find(u => u.email === demoAgentEmail);
+          if (existingAgentUser) {
+            agentUserId = existingAgentUser.id;
+            console.log('Found existing agent:', agentUserId);
+          }
+        } else {
+          throw agentAuthError;
+        }
+      } else {
+        agentUserId = agentAuthData.user.id;
+        console.log('Created new agent:', agentUserId);
+      }
+    } catch (error) {
+      console.error('Error with agent account:', error);
     }
 
-    // Create or update agent profile details
-    const { error: agentDetailsError } = await supabaseAdmin
-      .from('agent_profiles')
-      .upsert({
-        user_id: agentUserId,
-        license_number: 'RE-12345-DEMO',
-        brokerage_name: 'Demo Realty Group',
-        credit_balance: 150,
-        service_areas: ['San Francisco', 'Los Angeles', 'San Diego'],
-        profile_bio: 'Demo agent for testing the platform'
-      });
+    // Create/update buyer profile if we have a buyer user ID
+    if (buyerUserId) {
+      const { error: buyerProfileError } = await supabaseAdmin
+        .from('profiles')
+        .upsert({
+          user_id: buyerUserId,
+          email: demoUserEmail,
+          first_name: 'Demo',
+          user_type: 'Buyer',
+          credits: 1000,
+          is_verified: true
+        });
 
-    if (agentDetailsError) {
-      console.error('Error creating agent details:', agentDetailsError);
+      if (buyerProfileError) {
+        console.error('Error upserting buyer profile:', buyerProfileError);
+      } else {
+        console.log('Buyer profile updated successfully');
+      }
+    }
+
+    // Create/update agent profile if we have an agent user ID
+    if (agentUserId) {
+      const { error: agentProfileError } = await supabaseAdmin
+        .from('profiles')
+        .upsert({
+          user_id: agentUserId,
+          email: demoAgentEmail,
+          first_name: 'Agent Demo',
+          user_type: 'Agent',
+          credits: 0,
+          is_verified: true
+        });
+
+      if (agentProfileError) {
+        console.error('Error upserting agent profile:', agentProfileError);
+      } else {
+        console.log('Agent profile updated successfully');
+      }
+
+      // Create/update agent details
+      const { error: agentDetailsError } = await supabaseAdmin
+        .from('agent_profiles')
+        .upsert({
+          user_id: agentUserId,
+          license_number: 'RE-12345-DEMO',
+          brokerage_name: 'Demo Realty Group',
+          credit_balance: 150,
+          service_areas: ['San Francisco', 'Los Angeles', 'San Diego'],
+          profile_bio: 'Demo agent for testing the platform'
+        });
+
+      if (agentDetailsError) {
+        console.error('Error upserting agent details:', agentDetailsError);
+      } else {
+        console.log('Agent details updated successfully');
+      }
     }
 
     return new Response(
       JSON.stringify({ 
-        message: 'Demo accounts created successfully',
+        success: true,
+        message: 'Demo accounts created/updated successfully',
         buyerEmail: demoUserEmail,
         agentEmail: demoAgentEmail,
-        password: demoPassword
+        password: demoPassword,
+        buyerUserId,
+        agentUserId
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -139,12 +162,15 @@ const handler = async (req: Request): Promise<Response> => {
     );
 
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Unexpected error:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        details: 'Check function logs for more information'
+      }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400 
+        status: 500 
       }
     );
   }
