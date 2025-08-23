@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
 import { Upload, Clock, FileText, ArrowLeft } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
 interface Bounty {
   id: string;
@@ -21,11 +22,17 @@ interface Bounty {
 }
 
 const UploadDisclosureWrapper = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(() => {
-    return sessionStorage.getItem('agentLoggedIn') === 'true';
-  });
+  const { user, loading } = useAuth();
 
-  if (!isLoggedIn) {
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Card className="w-full max-w-md">
