@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 import { ShowingBidModal } from '@/components/ShowingBidModal';
 import { Coins, MapPin, Calendar, Upload, LogOut, Clock, Gavel } from 'lucide-react';
 
@@ -44,26 +45,45 @@ interface ShowingRequest {
 }
 
 const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
+  const { user } = useAuth();
   const [bounties, setBounties] = useState<Bounty[]>([]);
   const [claimedBounties, setClaimedBounties] = useState<Bounty[]>([]);
   const [showingRequests, setShowingRequests] = useState<ShowingRequest[]>([]);
   const [selectedShowingRequest, setSelectedShowingRequest] = useState<ShowingRequest | null>(null);
   const [isBidModalOpen, setIsBidModalOpen] = useState(false);
+  const [agentProfile, setAgentProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  // Mock agent profile data (since we removed auth)
-  const agentProfile = {
-    id: "agent-123",
-    creditBalance: 150,
-    licenseNumber: "RE-12345-CT",
-    brokerageName: "Premier Realty Group"
-  };
-
   useEffect(() => {
-    fetchBounties();
-    fetchShowingRequests();
-  }, []);
+    if (user) {
+      fetchAgentProfile();
+      fetchBounties();
+      fetchShowingRequests();
+    }
+  }, [user]);
+
+  const fetchAgentProfile = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('agent_profiles')
+        .select('*')
+        .eq('user_id', user?.id)
+        .single();
+
+      if (error) throw error;
+      setAgentProfile(data);
+    } catch (error) {
+      console.error('Error fetching agent profile:', error);
+      // Use fallback data if no profile exists
+      setAgentProfile({
+        id: user?.id,
+        credit_balance: 150,
+        license_number: "RE-12345-DEMO",
+        brokerage_name: "Demo Realty Group"
+      });
+    }
+  };
 
   const fetchBounties = async () => {
     try {
@@ -228,9 +248,9 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
             <div>
               <h1 className="text-3xl font-bold mb-2">Agent Dashboard</h1>
               <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                <span>License: {agentProfile.licenseNumber}</span>
+                <span>License: {agentProfile?.license_number || 'N/A'}</span>
                 <span>•</span>
-                <span>{agentProfile.brokerageName}</span>
+                <span>{agentProfile?.brokerage_name || 'N/A'}</span>
               </div>
             </div>
             {onLogout && (
@@ -251,7 +271,7 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-primary">
-                {agentProfile.creditBalance} Credits
+                {agentProfile?.credit_balance || 0} Credits
               </div>
               <p className="text-sm text-muted-foreground mt-2">
                 Earn 10 credits for each completed disclosure upload
@@ -439,7 +459,7 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
       {selectedShowingRequest && (
         <ShowingBidModal
           showingRequest={selectedShowingRequest}
-          agentId={agentProfile.id}
+          agentId={agentProfile?.id || user?.id || 'fallback-id'}
           isOpen={isBidModalOpen}
           onClose={() => {
             setIsBidModalOpen(false);

@@ -12,89 +12,139 @@ const handler = async (req: Request): Promise<Response> => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Initialize Supabase client with service role key for admin operations
+  const supabaseAdmin = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  );
+
+  const demoUserEmail = 'demo@intellehouse.com';
+  const demoAgentEmail = 'agent@intellehouse.com';
+  const demoPassword = 'demo123';
+
   try {
-    // Initialize Supabase client with service role key for admin operations
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
-    // Demo user credentials
-    const demoEmail = 'demo@intellehouse.com';
-    const demoPassword = 'demo123';
-    const demoFirstName = 'Demo';
-
-    console.log('Creating demo user...');
-
-    // Create the demo user
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: demoEmail,
+    // Create or get demo buyer user
+    const { data: buyerAuthData, error: buyerAuthError } = await supabaseAdmin.auth.admin.createUser({
+      email: demoUserEmail,
       password: demoPassword,
-      email_confirm: true, // Skip email confirmation for demo user
+      email_confirm: true,
       user_metadata: {
-        first_name: demoFirstName
+        first_name: 'Demo'
       }
     });
 
-    if (authError) {
-      // If user already exists, that's ok
-      if (authError.message.includes('User already registered')) {
-        console.log('Demo user already exists');
-        return new Response(
-          JSON.stringify({ success: true, message: 'Demo user already exists' }),
-          {
-            status: 200,
-            headers: {
-              'Content-Type': 'application/json',
-              ...corsHeaders,
-            },
-          }
-        );
-      }
-      throw authError;
+    if (buyerAuthError && !buyerAuthError.message.includes('already registered')) {
+      throw buyerAuthError;
     }
 
-    console.log('Demo user created successfully:', authData.user?.id);
-
-    // Create profile record
-    if (authData.user) {
-      const { error: profileError } = await supabaseAdmin
-        .from('profiles')
-        .insert({
-          user_id: authData.user.id,
-          email: demoEmail,
-          first_name: demoFirstName,
-          user_type: 'Buyer',
-          is_verified: true
-        });
-
-      if (profileError && !profileError.message.includes('duplicate key')) {
-        console.error('Error creating profile:', profileError);
-        // Don't fail the whole operation if profile creation fails
+    let buyerUserId;
+    if (buyerAuthData?.user) {
+      buyerUserId = buyerAuthData.user.id;
+    } else {
+      // User already exists, get their ID
+      const { data: existingBuyer } = await supabaseAdmin.auth.admin.listUsers();
+      const existingBuyerUser = existingBuyer.users.find(u => u.email === demoUserEmail);
+      if (!existingBuyerUser) {
+        throw new Error('Failed to create or find demo user');
       }
+      buyerUserId = existingBuyerUser.id;
+    }
+
+    // Create or update buyer profile
+    const { error: buyerProfileError } = await supabaseAdmin
+      .from('profiles')
+      .upsert({
+        user_id: buyerUserId,
+        email: demoUserEmail,
+        first_name: 'Demo',
+        user_type: 'Buyer',
+        credits: 1000,
+        is_verified: true
+      });
+
+    if (buyerProfileError) {
+      console.error('Error creating buyer profile:', buyerProfileError);
+    }
+
+    // Create or get demo agent user
+    const { data: agentAuthData, error: agentAuthError } = await supabaseAdmin.auth.admin.createUser({
+      email: demoAgentEmail,
+      password: demoPassword,
+      email_confirm: true,
+      user_metadata: {
+        first_name: 'Agent Demo'
+      }
+    });
+
+    if (agentAuthError && !agentAuthError.message.includes('already registered')) {
+      throw agentAuthError;
+    }
+
+    let agentUserId;
+    if (agentAuthData?.user) {
+      agentUserId = agentAuthData.user.id;
+    } else {
+      // User already exists, get their ID
+      const { data: existingAgent } = await supabaseAdmin.auth.admin.listUsers();
+      const existingAgentUser = existingAgent.users.find(u => u.email === demoAgentEmail);
+      if (!existingAgentUser) {
+        throw new Error('Failed to create or find demo agent');
+      }
+      agentUserId = existingAgentUser.id;
+    }
+
+    // Create or update agent profile
+    const { error: agentProfileError } = await supabaseAdmin
+      .from('profiles')
+      .upsert({
+        user_id: agentUserId,
+        email: demoAgentEmail,
+        first_name: 'Agent Demo',
+        user_type: 'Agent',
+        credits: 0,
+        is_verified: true
+      });
+
+    if (agentProfileError) {
+      console.error('Error creating agent profile:', agentProfileError);
+    }
+
+    // Create or update agent profile details
+    const { error: agentDetailsError } = await supabaseAdmin
+      .from('agent_profiles')
+      .upsert({
+        user_id: agentUserId,
+        license_number: 'RE-12345-DEMO',
+        brokerage_name: 'Demo Realty Group',
+        credit_balance: 150,
+        service_areas: ['San Francisco', 'Los Angeles', 'San Diego'],
+        profile_bio: 'Demo agent for testing the platform'
+      });
+
+    if (agentDetailsError) {
+      console.error('Error creating agent details:', agentDetailsError);
     }
 
     return new Response(
       JSON.stringify({ 
-        success: true, 
-        message: 'Demo user created successfully',
-        user_id: authData.user?.id 
+        message: 'Demo accounts created successfully',
+        buyerEmail: demoUserEmail,
+        agentEmail: demoAgentEmail,
+        password: demoPassword
       }),
-      {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-          ...corsHeaders,
-        },
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200 
       }
     );
-  } catch (error: any) {
-    console.error('Error in create-demo-user function:', error);
+
+  } catch (error) {
+    console.error('Error:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400 
       }
     );
   }
