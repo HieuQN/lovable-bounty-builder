@@ -26,11 +26,11 @@ const Home = () => {
     setLoading(true);
     
     try {
-      // Check if property already exists
+      // First try to find existing property by searching for similar addresses
       const { data: existingProperty, error: searchError } = await supabase
         .from('properties')
         .select('*')
-        .eq('full_address', address.trim())
+        .ilike('full_address', `%${address.trim()}%`)
         .single();
 
       if (searchError && searchError.code !== 'PGRST116') {
@@ -94,7 +94,7 @@ const Home = () => {
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="flex-1">
                   <Input
-                    placeholder="Enter a Property Address in Newtown, CT..."
+                    placeholder="Try: 123 Main Street, 456 Oak Avenue, or 789 Pine Road"
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
                     className="text-lg h-12"

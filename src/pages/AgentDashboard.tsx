@@ -6,7 +6,11 @@ import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
 import { useNavigate } from 'react-router-dom';
-import { Coins, MapPin, Calendar, Upload } from 'lucide-react';
+import { Coins, MapPin, Calendar, Upload, LogOut } from 'lucide-react';
+
+interface AgentDashboardProps {
+  onLogout?: () => void;
+}
 
 interface Bounty {
   id: string;
@@ -21,7 +25,7 @@ interface Bounty {
   };
 }
 
-const AgentDashboard = () => {
+const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
   const [bounties, setBounties] = useState<Bounty[]>([]);
   const [claimedBounties, setClaimedBounties] = useState<Bounty[]>([]);
   const [loading, setLoading] = useState(true);
@@ -145,13 +149,21 @@ const AgentDashboard = () => {
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-6xl mx-auto">
           {/* Agent Header */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold mb-2">Agent Dashboard</h1>
-            <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-              <span>License: {agentProfile.licenseNumber}</span>
-              <span>•</span>
-              <span>{agentProfile.brokerageName}</span>
+          <div className="flex justify-between items-start mb-8">
+            <div>
+              <h1 className="text-3xl font-bold mb-2">Agent Dashboard</h1>
+              <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                <span>License: {agentProfile.licenseNumber}</span>
+                <span>•</span>
+                <span>{agentProfile.brokerageName}</span>
+              </div>
             </div>
+            {onLogout && (
+              <Button variant="outline" onClick={onLogout}>
+                <LogOut className="w-4 h-4 mr-2" />
+                Logout
+              </Button>
+            )}
           </div>
 
           {/* Credit Balance Card */}

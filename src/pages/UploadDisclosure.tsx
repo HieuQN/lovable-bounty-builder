@@ -110,16 +110,13 @@ const UploadDisclosure = () => {
     setUploading(true);
     
     try {
-      // In a real app, you would upload the file to storage first
-      // For now, we'll just create the disclosure report with a placeholder
-
+      // Create disclosure report
       const { data: report, error: reportError } = await supabase
         .from('disclosure_reports')
         .insert({
           property_id: bounty.property_id,
-          // uploaded_by_agent_id: currentAgent.id, // Would be real agent ID
           status: 'processing',
-          raw_pdf_url: 'placeholder-file-url' // Would be real file URL
+          raw_pdf_url: `uploaded-${file.name}-${Date.now()}` // Placeholder file URL
         })
         .select('id')
         .single();
@@ -134,14 +131,22 @@ const UploadDisclosure = () => {
 
       if (bountyError) throw bountyError;
 
-      // Trigger dummy analysis (simulating the backend workflow)
-      setTimeout(async () => {
-        await triggerDummyAnalysis(report.id);
-      }, 1000);
+      // Call the edge function to process the analysis
+      const { error: functionError } = await supabase.functions.invoke('process-analysis', {
+        body: { 
+          reportId: report.id,
+          propertyAddress: bounty.properties?.full_address 
+        }
+      });
+
+      if (functionError) {
+        console.error('Error calling process-analysis function:', functionError);
+        // Don't throw here - the report is created, analysis will just be delayed
+      }
 
       toast({
         title: "Upload Successful!",
-        description: "Your disclosure has been submitted for analysis. You'll earn credits once processing is complete.",
+        description: "Your disclosure has been submitted for analysis. Processing will complete in about 15 seconds.",
       });
 
       navigate('/agent-dashboard');
@@ -154,55 +159,6 @@ const UploadDisclosure = () => {
       });
     } finally {
       setUploading(false);
-    }
-  };
-
-  const triggerDummyAnalysis = async (reportId: string) => {
-    // Simulate the processing workflow
-    try {
-      await new Promise(resolve => setTimeout(resolve, 15000)); // 15 second delay
-
-      const dummyAnalysis = {
-        risk_score: Math.round((Math.random() * 7 + 2) * 10) / 10, // 2.0 to 9.0
-        summary_teaser: `This report for ${bounty?.properties?.full_address} has been processed. Our initial scan highlights potential items of interest in the foundation and roofing sections. Unlock the full report for a detailed breakdown.`,
-        findings: [
-          {
-            category: "Foundation",
-            issue: "Seller noted 'minor seasonal dampness' in the southwest corner of the basement. A hairline crack was previously sealed in 2019.",
-            risk_level: "Medium",
-            estimated_cost: "$500 - $3,500",
-            negotiation_point: "Recommend a foundation inspection contingency. Could be a minor issue or a sign of hydrostatic pressure. A potential point for a seller credit towards waterproofing."
-          },
-          {
-            category: "Roof",
-            issue: "Roof is 18 years old (Asphalt Shingle). Seller is not aware of any current leaks.",
-            risk_level: "Medium",
-            estimated_cost: "$8,000 - $15,000",
-            negotiation_point: "An 18-year-old roof is near the end of its typical lifespan. This is a major upcoming expense. Use this to negotiate on price or request a credit, as replacement will likely be needed within 5 years."
-          },
-          {
-            category: "Electrical",
-            issue: "Home contains some ungrounded two-prong outlets. Electrical panel is Federal Pacific.",
-            risk_level: "High",
-            estimated_cost: "$2,500 - $6,000",
-            negotiation_point: "Federal Pacific panels are widely considered a fire hazard and may not be insurable. This is a significant safety and financial issue. Strongly recommend requesting the seller replace the panel as a condition of the sale."
-          }
-        ]
-      };
-
-      await supabase
-        .from('disclosure_reports')
-        .update({
-          status: 'complete',
-          dummy_analysis_complete: true,
-          risk_score: dummyAnalysis.risk_score,
-          report_summary_basic: dummyAnalysis.summary_teaser,
-          report_summary_full: JSON.stringify(dummyAnalysis)
-        })
-        .eq('id', reportId);
-
-    } catch (error) {
-      console.error('Error in dummy analysis:', error);
     }
   };
 

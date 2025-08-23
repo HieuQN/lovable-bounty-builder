@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Home from "./pages/Home";
 import Analyze from "./pages/Analyze";
-import AgentDashboard from "./pages/AgentDashboard";
+import AgentLogin from "./pages/AgentLogin";
 import UploadDisclosure from "./pages/UploadDisclosure";
 import NotFound from "./pages/NotFound";
 
@@ -20,7 +20,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/analyze/:propertyId" element={<Analyze />} />
-          <Route path="/agent-dashboard" element={<AgentDashboard />} />
+          <Route path="/agent-dashboard" element={<AgentLogin />} />
           <Route path="/upload/:bountyId" element={<UploadDisclosure />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
