@@ -9,7 +9,8 @@ import { toast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { ShowingBidModal } from '@/components/ShowingBidModal';
-import { Coins, MapPin, Calendar, Upload, LogOut, Clock, Gavel } from 'lucide-react';
+import { UploadDisclosureModal } from '@/components/UploadDisclosureModal';
+import { Coins, MapPin, Calendar, Upload, LogOut, Clock, Gavel, FileText, Eye, Download } from 'lucide-react';
 
 interface AgentDashboardProps {
   onLogout?: () => void;
@@ -21,6 +22,34 @@ interface Bounty {
   status: string;
   created_at: string;
   claim_expiration?: string;
+  properties?: {
+    full_address: string;
+    city: string;
+    state: string;
+  };
+}
+
+interface DisclosureReport {
+  id: string;
+  property_id: string;
+  status: string;
+  created_at: string;
+  report_summary_basic: string;
+  raw_pdf_url?: string;
+  properties?: {
+    full_address: string;
+    city: string;
+    state: string;
+  };
+}
+
+interface UpcomingShowing {
+  id: string;
+  property_id: string;
+  status: string;
+  winning_bid_amount?: number;
+  selected_time_slot?: string;
+  created_at: string;
   properties?: {
     full_address: string;
     city: string;
@@ -49,8 +78,11 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
   const [bounties, setBounties] = useState<Bounty[]>([]);
   const [claimedBounties, setClaimedBounties] = useState<Bounty[]>([]);
   const [showingRequests, setShowingRequests] = useState<ShowingRequest[]>([]);
+  const [myDisclosures, setMyDisclosures] = useState<DisclosureReport[]>([]);
+  const [upcomingShowings, setUpcomingShowings] = useState<UpcomingShowing[]>([]);
   const [selectedShowingRequest, setSelectedShowingRequest] = useState<ShowingRequest | null>(null);
   const [isBidModalOpen, setIsBidModalOpen] = useState(false);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [agentProfile, setAgentProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -60,6 +92,8 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
       fetchAgentProfile();
       fetchBounties();
       fetchShowingRequests();
+      fetchMyDisclosures();
+      fetchUpcomingShowings();
     }
   }, [user]);
 
@@ -156,8 +190,67 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
         description: "Failed to load showing requests",
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
+    }
+  };
+
+  const fetchMyDisclosures = async () => {
+    try {
+      const { data: agentProfile } = await supabase
+        .from('agent_profiles')
+        .select('id')
+        .eq('user_id', user?.id)
+        .single();
+
+      if (!agentProfile) return;
+
+      const { data, error } = await supabase
+        .from('disclosure_reports')
+        .select(`
+          *,
+          properties (
+            full_address,
+            city,
+            state
+          )
+        `)
+        .eq('uploaded_by_agent_id', agentProfile.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setMyDisclosures(data || []);
+    } catch (error) {
+      console.error('Error fetching disclosures:', error);
+    }
+  };
+
+  const fetchUpcomingShowings = async () => {
+    try {
+      const { data: agentProfile } = await supabase
+        .from('agent_profiles')
+        .select('id')
+        .eq('user_id', user?.id)
+        .single();
+
+      if (!agentProfile) return;
+
+      const { data, error } = await supabase
+        .from('showing_requests')
+        .select(`
+          *,
+          properties (
+            full_address,
+            city,
+            state
+          )
+        `)
+        .eq('winning_agent_id', agentProfile.id)
+        .in('status', ['awarded', 'confirmed'])
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setUpcomingShowings(data || []);
+    } catch (error) {
+      console.error('Error fetching upcoming showings:', error);
     }
   };
 
@@ -229,6 +322,22 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
 
   const handleBidSuccess = () => {
     fetchShowingRequests(); // Refresh showing requests
+    fetchUpcomingShowings(); // Refresh upcoming showings
+    fetchAgentProfile(); // Refresh credit balance
+  };
+
+  const handleUploadSuccess = () => {
+    fetchMyDisclosures(); // Refresh uploaded disclosures
+    fetchAgentProfile(); // Refresh credit balance
+  };
+
+  const downloadDisclosure = (url: string, propertyAddress: string) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `disclosure-${propertyAddress.replace(/\s+/g, '-')}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   if (loading) {
@@ -323,20 +432,165 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
           )}
 
           {/* Available Work Tabs */}
-          <Tabs defaultValue="bounties" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+          <Tabs defaultValue="disclosures" className="w-full">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="disclosures" className="flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                My Disclosures
+              </TabsTrigger>
+              <TabsTrigger value="showings" className="flex items-center gap-2">
+                <Calendar className="w-4 h-4" />
+                Upcoming Showings
+              </TabsTrigger>
               <TabsTrigger value="bounties" className="flex items-center gap-2">
                 <Upload className="w-4 h-4" />
                 Disclosure Bounties
               </TabsTrigger>
-              <TabsTrigger value="showings" className="flex items-center gap-2">
+              <TabsTrigger value="showing-bids" className="flex items-center gap-2">
                 <Gavel className="w-4 h-4" />
                 Showing Requests
               </TabsTrigger>
             </TabsList>
 
+            <TabsContent value="disclosures" className="mt-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-semibold">My Uploaded Disclosures</h2>
+                <Button onClick={() => setIsUploadModalOpen(true)}>
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload New Disclosure
+                </Button>
+              </div>
+              
+              {myDisclosures.length === 0 ? (
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center py-8">
+                      <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold mb-2">No disclosures uploaded yet</h3>
+                      <p className="text-muted-foreground mb-4">
+                        Upload disclosure documents to earn credits and build your portfolio
+                      </p>
+                      <Button onClick={() => setIsUploadModalOpen(true)}>
+                        <Upload className="w-4 h-4 mr-2" />
+                        Upload Your First Disclosure
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {myDisclosures.map((disclosure) => (
+                    <Card key={disclosure.id} className="hover:shadow-lg transition-shadow">
+                      <CardHeader>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <CardTitle className="text-lg">
+                              {disclosure.properties?.full_address}
+                            </CardTitle>
+                            <CardDescription>
+                              {disclosure.properties?.city}, {disclosure.properties?.state}
+                            </CardDescription>
+                          </div>
+                          <Badge variant={disclosure.status === 'complete' ? 'default' : 'secondary'}>
+                            {disclosure.status}
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div className="text-sm text-muted-foreground">
+                            <p>{disclosure.report_summary_basic}</p>
+                          </div>
+                          <div className="flex items-center text-sm text-muted-foreground">
+                            <Calendar className="w-4 h-4 mr-2" />
+                            Uploaded: {new Date(disclosure.created_at).toLocaleDateString()}
+                          </div>
+                          {disclosure.status === 'complete' && (
+                            <div className="flex items-center text-sm font-medium text-green-600">
+                              <Coins className="w-4 h-4 mr-2" />
+                              Earned 10 Credits
+                            </div>
+                          )}
+                          <div className="flex gap-2">
+                            {disclosure.raw_pdf_url && (
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => downloadDisclosure(disclosure.raw_pdf_url!, disclosure.properties?.full_address || 'property')}
+                              >
+                                <Download className="w-4 h-4 mr-2" />
+                                Download
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="showings" className="mt-6">
+              <h2 className="text-2xl font-semibold mb-4">Upcoming Showings</h2>
+              
+              {upcomingShowings.length === 0 ? (
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center py-8">
+                      <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold mb-2">No upcoming showings</h3>
+                      <p className="text-muted-foreground">
+                        Win showing bids to see your upcoming appointments here
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {upcomingShowings.map((showing) => (
+                    <Card key={showing.id} className="hover:shadow-lg transition-shadow border-blue-200 bg-blue-50/50">
+                      <CardHeader>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <CardTitle className="text-lg">
+                              {showing.properties?.full_address}
+                            </CardTitle>
+                            <CardDescription>
+                              {showing.properties?.city}, {showing.properties?.state}
+                            </CardDescription>
+                          </div>
+                          <Badge variant="default">{showing.status}</Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div className="flex items-center text-sm text-muted-foreground">
+                            <Calendar className="w-4 h-4 mr-2" />
+                            Won on: {new Date(showing.created_at).toLocaleDateString()}
+                          </div>
+                          {showing.selected_time_slot && (
+                            <div className="flex items-center text-sm font-medium text-blue-600">
+                              <Clock className="w-4 h-4 mr-2" />
+                              {showing.selected_time_slot}
+                            </div>
+                          )}
+                          {showing.winning_bid_amount && (
+                            <div className="flex items-center text-sm text-orange-600">
+                              <Coins className="w-4 h-4 mr-2" />
+                              Paid: {showing.winning_bid_amount} Credits
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
             <TabsContent value="bounties" className="mt-6">
-              <h2 className="text-2xl font-semibold mb-4">Available Bounties</h2>
+              <h2 className="text-2xl font-semibold mb-4">Available Disclosure Bounties</h2>
               
               {bounties.length === 0 ? (
                 <Card>
@@ -391,7 +645,7 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
               )}
             </TabsContent>
 
-            <TabsContent value="showings" className="mt-6">
+            <TabsContent value="showing-bids" className="mt-6">
               <h2 className="text-2xl font-semibold mb-4">Showing Requests</h2>
               
               {showingRequests.length === 0 ? (
@@ -454,6 +708,13 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
           </Tabs>
         </div>
       </div>
+
+      {/* Upload Disclosure Modal */}
+      <UploadDisclosureModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        onUploadSuccess={handleUploadSuccess}
+      />
 
       {/* Showing Bid Modal */}
       {selectedShowingRequest && (
