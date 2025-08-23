@@ -522,45 +522,173 @@ const BuyerDashboard = () => {
 
                   {selectedForComparison.size >= 2 && (
                     <div>
-                      <h3 className="text-lg font-medium mb-4">Property Comparison</h3>
+                      <h3 className="text-lg font-medium mb-4">Detailed Property Comparison</h3>
                       <div className="overflow-x-auto">
                         <table className="w-full border-collapse">
                           <thead>
                             <tr className="border-b">
-                              <th className="text-left p-4 font-medium">Property</th>
+                              <th className="text-left p-4 font-medium">Category</th>
                               {getSelectedReports().map((report) => (
-                                <th key={report.id} className="text-left p-4 font-medium min-w-[200px]">
+                                <th key={report.id} className="text-left p-4 font-medium min-w-[300px]">
                                   <div>
                                     <div className="font-medium">{report.properties.full_address}</div>
                                     <div className="text-sm text-muted-foreground">{report.properties.city}, {report.properties.state}</div>
+                                    <Badge variant={report.risk_score > 7 ? "destructive" : report.risk_score > 5 ? "secondary" : "default"} className="mt-1">
+                                      Risk: {report.risk_score}/10
+                                    </Badge>
                                   </div>
                                 </th>
                               ))}
                             </tr>
                           </thead>
                           <tbody>
-                            <tr className="border-b">
-                              <td className="p-4 font-medium">Risk Score</td>
+                            <tr className="border-b bg-muted/30">
+                              <td className="p-4 font-medium">Overall Summary</td>
                               {getSelectedReports().map((report) => (
                                 <td key={report.id} className="p-4">
-                                  <Badge variant={report.risk_score > 7 ? "destructive" : report.risk_score > 5 ? "secondary" : "default"}>
-                                    {report.risk_score}/10
-                                  </Badge>
+                                  <p className="text-sm">{report.report_summary_basic}</p>
                                 </td>
                               ))}
                             </tr>
+                            
+                            {/* Foundation Issues */}
                             <tr className="border-b">
-                              <td className="p-4 font-medium">Report Summary</td>
-                              {getSelectedReports().map((report) => (
-                                <td key={report.id} className="p-4">
-                                  <p className="text-sm text-muted-foreground line-clamp-3">
-                                    {report.report_summary_basic}
-                                  </p>
-                                </td>
-                              ))}
+                              <td className="p-4 font-medium text-orange-600">Foundation</td>
+                              {getSelectedReports().map((report) => {
+                                const findings = report.report_summary_full?.findings || [];
+                                const foundationIssue = findings.find((f: any) => f.category === 'Foundation');
+                                return (
+                                  <td key={report.id} className="p-4">
+                                    {foundationIssue ? (
+                                      <div className="space-y-2">
+                                        <div>
+                                          <Badge variant={foundationIssue.risk_level === 'High' ? "destructive" : foundationIssue.risk_level === 'Medium' ? "secondary" : "default"} className="text-xs">
+                                            {foundationIssue.risk_level}
+                                          </Badge>
+                                        </div>
+                                        <p className="text-sm">{foundationIssue.issue}</p>
+                                        <p className="text-xs text-green-600 font-medium">{foundationIssue.estimated_cost}</p>
+                                        <p className="text-xs text-muted-foreground">{foundationIssue.negotiation_point}</p>
+                                      </div>
+                                    ) : (
+                                      <span className="text-sm text-muted-foreground">No issues reported</span>
+                                    )}
+                                  </td>
+                                );
+                              })}
                             </tr>
+
+                            {/* Roof Issues */}
                             <tr className="border-b">
-                              <td className="p-4 font-medium">Purchase Date</td>
+                              <td className="p-4 font-medium text-blue-600">Roof</td>
+                              {getSelectedReports().map((report) => {
+                                const findings = report.report_summary_full?.findings || [];
+                                const roofIssue = findings.find((f: any) => f.category === 'Roof');
+                                return (
+                                  <td key={report.id} className="p-4">
+                                    {roofIssue ? (
+                                      <div className="space-y-2">
+                                        <div>
+                                          <Badge variant={roofIssue.risk_level === 'High' ? "destructive" : roofIssue.risk_level === 'Medium' ? "secondary" : "default"} className="text-xs">
+                                            {roofIssue.risk_level}
+                                          </Badge>
+                                        </div>
+                                        <p className="text-sm">{roofIssue.issue}</p>
+                                        <p className="text-xs text-green-600 font-medium">{roofIssue.estimated_cost}</p>
+                                        <p className="text-xs text-muted-foreground">{roofIssue.negotiation_point}</p>
+                                      </div>
+                                    ) : (
+                                      <span className="text-sm text-muted-foreground">No issues reported</span>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+
+                            {/* Electrical Issues */}
+                            <tr className="border-b">
+                              <td className="p-4 font-medium text-yellow-600">Electrical</td>
+                              {getSelectedReports().map((report) => {
+                                const findings = report.report_summary_full?.findings || [];
+                                const electricalIssue = findings.find((f: any) => f.category === 'Electrical');
+                                return (
+                                  <td key={report.id} className="p-4">
+                                    {electricalIssue ? (
+                                      <div className="space-y-2">
+                                        <div>
+                                          <Badge variant={electricalIssue.risk_level === 'High' ? "destructive" : electricalIssue.risk_level === 'Medium' ? "secondary" : "default"} className="text-xs">
+                                            {electricalIssue.risk_level}
+                                          </Badge>
+                                        </div>
+                                        <p className="text-sm">{electricalIssue.issue}</p>
+                                        <p className="text-xs text-green-600 font-medium">{electricalIssue.estimated_cost}</p>
+                                        <p className="text-xs text-muted-foreground">{electricalIssue.negotiation_point}</p>
+                                      </div>
+                                    ) : (
+                                      <span className="text-sm text-muted-foreground">No issues reported</span>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+
+                            {/* HVAC Issues */}
+                            <tr className="border-b">
+                              <td className="p-4 font-medium text-purple-600">HVAC</td>
+                              {getSelectedReports().map((report) => {
+                                const findings = report.report_summary_full?.findings || [];
+                                const hvacIssue = findings.find((f: any) => f.category === 'HVAC');
+                                return (
+                                  <td key={report.id} className="p-4">
+                                    {hvacIssue ? (
+                                      <div className="space-y-2">
+                                        <div>
+                                          <Badge variant={hvacIssue.risk_level === 'High' ? "destructive" : hvacIssue.risk_level === 'Medium' ? "secondary" : "default"} className="text-xs">
+                                            {hvacIssue.risk_level}
+                                          </Badge>
+                                        </div>
+                                        <p className="text-sm">{hvacIssue.issue}</p>
+                                        <p className="text-xs text-green-600 font-medium">{hvacIssue.estimated_cost}</p>
+                                        <p className="text-xs text-muted-foreground">{hvacIssue.negotiation_point}</p>
+                                      </div>
+                                    ) : (
+                                      <span className="text-sm text-muted-foreground">No issues reported</span>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+
+                            {/* Plumbing Issues */}
+                            <tr className="border-b">
+                              <td className="p-4 font-medium text-cyan-600">Plumbing</td>
+                              {getSelectedReports().map((report) => {
+                                const findings = report.report_summary_full?.findings || [];
+                                const plumbingIssue = findings.find((f: any) => f.category === 'Plumbing');
+                                return (
+                                  <td key={report.id} className="p-4">
+                                    {plumbingIssue ? (
+                                      <div className="space-y-2">
+                                        <div>
+                                          <Badge variant={plumbingIssue.risk_level === 'High' ? "destructive" : plumbingIssue.risk_level === 'Medium' ? "secondary" : "default"} className="text-xs">
+                                            {plumbingIssue.risk_level}
+                                          </Badge>
+                                        </div>
+                                        <p className="text-sm">{plumbingIssue.issue}</p>
+                                        <p className="text-xs text-green-600 font-medium">{plumbingIssue.estimated_cost}</p>
+                                        <p className="text-xs text-muted-foreground">{plumbingIssue.negotiation_point}</p>
+                                      </div>
+                                    ) : (
+                                      <span className="text-sm text-muted-foreground">No issues reported</span>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+
+                            {/* Report Date & Actions */}
+                            <tr className="border-b bg-muted/30">
+                              <td className="p-4 font-medium">Report Date</td>
                               {getSelectedReports().map((report) => (
                                 <td key={report.id} className="p-4">
                                   <p className="text-sm">
@@ -579,7 +707,7 @@ const BuyerDashboard = () => {
                                       onClick={() => viewReport(report.id, report.property_id)}
                                     >
                                       <Eye className="w-4 h-4 mr-2" />
-                                      View Report
+                                      View Full Report
                                     </Button>
                                     <Button 
                                       size="sm" 
