@@ -472,6 +472,9 @@ export type Database = {
         | "showing_win"
         | "showing_deduction"
         | "manual_adjustment"
+        | "showing_bid_placed"
+        | "showing_bid_win"
+        | "showing_bid_refund"
       user_type: "Buyer" | "Agent"
     }
     CompositeTypes: {
@@ -615,6 +618,9 @@ export const Constants = {
         "showing_win",
         "showing_deduction",
         "manual_adjustment",
+        "showing_bid_placed",
+        "showing_bid_win",
+        "showing_bid_refund",
       ],
       user_type: ["Buyer", "Agent"],
     },
