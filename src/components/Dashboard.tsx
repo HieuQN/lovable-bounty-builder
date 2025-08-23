@@ -3,7 +3,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/components/ui/use-toast';
 
 interface Bounty {
@@ -19,7 +18,6 @@ interface Bounty {
 }
 
 const Dashboard = () => {
-  const { user } = useAuth();
   const [bounties, setBounties] = useState<Bounty[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -57,34 +55,12 @@ const Dashboard = () => {
   };
 
   const claimBounty = async (bountyId: string) => {
-    if (!user) return;
-
-    try {
-      const { error } = await supabase
-        .from('disclosure_bounties')
-        .update({
-          status: 'claimed',
-          claimed_by_agent_id: user.id,
-          claim_expiration: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours from now
-        })
-        .eq('id', bountyId);
-
-      if (error) throw error;
-
-      toast({
-        title: "Bounty claimed!",
-        description: "You have 24 hours to upload the disclosure report.",
-      });
-
-      fetchBounties(); // Refresh the list
-    } catch (error) {
-      console.error('Error claiming bounty:', error);
-      toast({
-        title: "Error",
-        description: "Failed to claim bounty",
-        variant: "destructive",
-      });
-    }
+    // For demo purposes, show a message about authentication being needed
+    toast({
+      title: "Authentication Required",
+      description: "Please sign in to claim bounties",
+      variant: "destructive",
+    });
   };
 
   if (loading) {
