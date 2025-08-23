@@ -692,36 +692,45 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
                                  ? 'You confirmed - Waiting for buyer'
                                  : 'Pending confirmation'}
                              </div>
-                             {showing.confirmation_status === 'pending' ? (
-                               <Button 
-                                 size="sm" 
-                                 onClick={() => confirmShowing(showing.id)}
-                                 className="w-full"
-                               >
-                                 <CheckCircle className="w-4 h-4 mr-2" />
-                                 Confirm Showing Completed
-                               </Button>
-                             ) : showing.confirmation_status === 'agent_confirmed' ? (
-                               <Button 
-                                 size="sm" 
-                                 variant="outline"
-                                 className="w-full bg-green-50 text-green-700 border-green-200"
-                                 disabled
-                               >
-                                 <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
-                                 You Confirmed
-                               </Button>
-                             ) : (
-                               <Button 
-                                 size="sm" 
-                                 variant="outline"
-                                 className="w-full bg-green-50 text-green-700 border-green-200"
-                                 disabled
-                               >
-                                 <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
-                                 Completed & Credits Earned
-                               </Button>
-                             )}
+                              {showing.confirmation_status === 'pending' ? (
+                                <Button 
+                                  size="sm" 
+                                  onClick={() => confirmShowing(showing.id)}
+                                  className="w-full"
+                                >
+                                  <CheckCircle className="w-4 h-4 mr-2" />
+                                  Confirm Showing Completed
+                                </Button>
+                              ) : showing.confirmation_status === 'agent_confirmed' ? (
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  className="w-full bg-yellow-50 text-yellow-700 border-yellow-200"
+                                  disabled
+                                >
+                                  <Clock className="w-4 h-4 mr-2 text-yellow-600" />
+                                  Waiting for Buyer
+                                </Button>
+                              ) : showing.confirmation_status === 'buyer_confirmed' ? (
+                                <Button 
+                                  size="sm" 
+                                  onClick={() => confirmShowing(showing.id)}
+                                  className="w-full bg-blue-600 hover:bg-blue-700"
+                                >
+                                  <CheckCircle className="w-4 h-4 mr-2" />
+                                  Confirm (Buyer Ready!)
+                                </Button>
+                              ) : (
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  className="w-full bg-green-50 text-green-700 border-green-200"
+                                  disabled
+                                >
+                                  <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
+                                  Completed & Credits Earned
+                                </Button>
+                              )}
                            </div>
                          </div>
                       </CardContent>
