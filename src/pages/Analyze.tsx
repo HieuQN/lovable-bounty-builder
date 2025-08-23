@@ -5,8 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/components/ui/use-toast';
 import { AlertTriangle, FileText, DollarSign, ArrowLeft } from 'lucide-react';
+import PaymentModal from '@/components/PaymentModal';
 
 interface Property {
   id: string;
@@ -28,10 +30,12 @@ interface DisclosureReport {
 const Analyze = () => {
   const { propertyId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [property, setProperty] = useState<Property | null>(null);
   const [report, setReport] = useState<DisclosureReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [requesting, setRequesting] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   useEffect(() => {
     fetchPropertyAndReport();
@@ -202,7 +206,17 @@ const Analyze = () => {
                 </CardHeader>
                 <CardContent>
                   <p className="text-muted-foreground mb-4">{report.report_summary_basic}</p>
-                  <Button size="lg" className="w-full">
+                  <Button 
+                    size="lg" 
+                    className="w-full"
+                    onClick={() => {
+                      if (!user) {
+                        navigate('/auth');
+                      } else {
+                        setShowPaymentModal(true);
+                      }
+                    }}
+                  >
                     <DollarSign className="w-4 h-4 mr-2" />
                     Unlock Full Report ($39)
                   </Button>
@@ -276,6 +290,20 @@ const Analyze = () => {
               </CardContent>
             </Card>
           )}
+          
+          <PaymentModal
+            open={showPaymentModal}
+            onOpenChange={setShowPaymentModal}
+            onPaymentSuccess={() => {
+              toast({
+                title: "Payment Successful!",
+                description: "Report unlocked! Redirecting to your dashboard...",
+              });
+              setTimeout(() => navigate('/dashboard'), 1500);
+            }}
+            propertyAddress={property?.full_address || ''}
+            amount={39}
+          />
         </div>
       </div>
     </div>
