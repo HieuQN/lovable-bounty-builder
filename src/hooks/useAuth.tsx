@@ -6,7 +6,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string, firstName?: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, firstName?: string, userType?: 'Buyer' | 'Agent') => Promise<{ error: any; message?: string }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
 }
@@ -38,19 +38,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string, firstName?: string) => {
-    const redirectUrl = `${window.location.origin}/`;
+  const signUp = async (email: string, password: string, firstName?: string, userType?: 'Buyer' | 'Agent') => {
+    const redirectUrl = `${window.location.origin}/confirm-email`;
     
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: redirectUrl,
         data: {
-          first_name: firstName
+          first_name: firstName,
+          user_type: userType || (email.includes('agent') ? 'Agent' : 'Buyer')
         }
       }
     });
+
+    // If signup was successful but user needs email confirmation
+    if (data.user && !data.session) {
+      return { 
+        error: null, 
+        message: "Please check your email for a confirmation link to complete your account setup."
+      };
+    }
+
     return { error };
   };
 

@@ -6,9 +6,11 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { CreateDemoUser } from '@/components/CreateDemoUser';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import { Eye, EyeOff, UserIcon, Briefcase } from 'lucide-react';
 
 const Auth = () => {
@@ -17,15 +19,35 @@ const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [userType, setUserType] = useState<'Buyer' | 'Agent'>('Buyer');
 
   useEffect(() => {
     if (user && !loading) {
-      // Redirect based on user type or email
-      if (user.email?.includes('agent')) {
-        navigate('/agent-dashboard');
-      } else {
-        navigate('/dashboard');
-      }
+      // Fetch user profile to determine correct dashboard
+      const redirectUser = async () => {
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('user_type')
+            .eq('user_id', user.id)
+            .single();
+          
+          if (profile?.user_type === 'Agent') {
+            navigate('/agent-dashboard');
+          } else {
+            navigate('/dashboard');
+          }
+        } catch (error) {
+          // Fallback to email-based redirect if profile lookup fails
+          if (user.email?.includes('agent')) {
+            navigate('/agent-dashboard');
+          } else {
+            navigate('/dashboard');
+          }
+        }
+      };
+      
+      redirectUser();
     }
   }, [user, loading, navigate]);
 
@@ -63,16 +85,25 @@ const Auth = () => {
 
     try {
       const { error } = await signIn(email, password);
-      if (error) throw error;
-      
-      // Navigate based on user type
-      if (email.includes('agent')) {
-        navigate('/agent-dashboard');
-      } else {
-        navigate('/dashboard');
+      if (error) {
+        // Handle specific signin errors
+        if (error.message.includes('Invalid login credentials')) {
+          setError('Invalid email or password. Please check your credentials and try again.');
+        } else if (error.message.includes('Email not confirmed')) {
+          setError('Please check your email and click the confirmation link to activate your account.');
+        } else {
+          setError(error.message);
+        }
+        throw error;
       }
+      
+      // Success - redirection will happen automatically via useEffect
+      toast({
+        title: "Welcome back!",
+        description: "You have been signed in successfully.",
+      });
+      
     } catch (error: any) {
-      setError(error.message);
       toast({
         title: "Sign in failed",
         description: error.message,
@@ -93,16 +124,41 @@ const Auth = () => {
     const password = formData.get('password') as string;
     const firstName = formData.get('firstName') as string;
 
+    // Add password validation
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long');
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      const { error } = await signUp(email, password, firstName);
-      if (error) throw error;
+      const { error, message } = await signUp(email, password, firstName, userType);
+      if (error) {
+        // Handle specific error cases
+        if (error.message.includes('already registered')) {
+          setError('An account with this email already exists. Please sign in instead.');
+        } else if (error.message.includes('weak_password')) {
+          setError('Password is too weak. Please choose a stronger password.');
+        } else if (error.message.includes('invalid_email')) {
+          setError('Please enter a valid email address.');
+        } else {
+          setError(error.message);
+        }
+        throw error;
+      }
       
+      // Success message
+      const successMessage = message || "Account created successfully! Please check your email for a confirmation link.";
       toast({
-        title: "Check your email",
-        description: "We've sent you a confirmation link.",
+        title: "Account Created!",
+        description: successMessage,
       });
+      
+      // Clear form
+      (e.target as HTMLFormElement).reset();
+      setUserType('Buyer');
+      
     } catch (error: any) {
-      setError(error.message);
       toast({
         title: "Sign up failed",
         description: error.message,
@@ -246,7 +302,7 @@ const Auth = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="signup-password">Password</Label>
+                    <Label htmlFor="signup-password">Password (min. 6 characters)</Label>
                     <div className="relative">
                       <Input
                         id="signup-password"
@@ -254,6 +310,7 @@ const Auth = () => {
                         type={showPassword ? "text" : "password"}
                         placeholder="Create a password"
                         required
+                        minLength={6}
                       />
                       <Button
                         type="button"
@@ -270,8 +327,36 @@ const Auth = () => {
                       </Button>
                     </div>
                   </div>
+                  <div className="space-y-2">
+                    <Label>Account Type</Label>
+                    <RadioGroup 
+                      value={userType} 
+                      onValueChange={(value: 'Buyer' | 'Agent') => setUserType(value)}
+                      className="flex flex-row space-x-6"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="Buyer" id="buyer" />
+                        <Label htmlFor="buyer" className="flex items-center gap-2 cursor-pointer">
+                          <UserIcon className="w-4 h-4" />
+                          Buyer
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="Agent" id="agent" />
+                        <Label htmlFor="agent" className="flex items-center gap-2 cursor-pointer">
+                          <Briefcase className="w-4 h-4" />
+                          Agent
+                        </Label>
+                      </div>
+                    </RadioGroup>
+                    <p className="text-xs text-muted-foreground">
+                      {userType === 'Buyer' 
+                        ? "Access property disclosures and request showings" 
+                        : "Upload disclosures and bid on showing requests"}
+                    </p>
+                  </div>
                   <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? "Creating account..." : "Sign Up"}
+                    {isLoading ? "Creating account..." : `Sign Up as ${userType}`}
                   </Button>
                 </form>
               </TabsContent>

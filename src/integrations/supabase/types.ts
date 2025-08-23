@@ -444,6 +444,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_profile_if_not_exists: {
+        Args: {
+          email: string
+          user_id: string
+          user_type_val?: Database["public"]["Enums"]["user_type"]
+        }
+        Returns: undefined
+      }
       log_credit_transaction: {
         Args: {
           p_agent_profile_id: string
