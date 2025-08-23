@@ -92,6 +92,42 @@ export type Database = {
           },
         ]
       }
+      credit_transactions: {
+        Row: {
+          agent_profile_id: string | null
+          amount: number
+          created_at: string
+          description: string | null
+          id: string
+          related_disclosure_id: string | null
+          related_showing_id: string | null
+          transaction_type: Database["public"]["Enums"]["transaction_type"]
+          user_id: string
+        }
+        Insert: {
+          agent_profile_id?: string | null
+          amount: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          related_disclosure_id?: string | null
+          related_showing_id?: string | null
+          transaction_type: Database["public"]["Enums"]["transaction_type"]
+          user_id: string
+        }
+        Update: {
+          agent_profile_id?: string | null
+          amount?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          related_disclosure_id?: string | null
+          related_showing_id?: string | null
+          transaction_type?: Database["public"]["Enums"]["transaction_type"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       disclosure_bounties: {
         Row: {
           claim_expiration: string | null
@@ -324,6 +360,11 @@ export type Database = {
       }
       showing_requests: {
         Row: {
+          agent_confirmed_at: string | null
+          buyer_confirmed_at: string | null
+          confirmation_status:
+            | Database["public"]["Enums"]["confirmation_status"]
+            | null
           created_at: string
           credits_spent: number | null
           current_high_bid: number | null
@@ -340,6 +381,11 @@ export type Database = {
           winning_bid_amount: number | null
         }
         Insert: {
+          agent_confirmed_at?: string | null
+          buyer_confirmed_at?: string | null
+          confirmation_status?:
+            | Database["public"]["Enums"]["confirmation_status"]
+            | null
           created_at?: string
           credits_spent?: number | null
           current_high_bid?: number | null
@@ -356,6 +402,11 @@ export type Database = {
           winning_bid_amount?: number | null
         }
         Update: {
+          agent_confirmed_at?: string | null
+          buyer_confirmed_at?: string | null
+          confirmation_status?:
+            | Database["public"]["Enums"]["confirmation_status"]
+            | null
           created_at?: string
           credits_spent?: number | null
           current_high_bid?: number | null
@@ -393,12 +444,34 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      log_credit_transaction: {
+        Args: {
+          p_agent_profile_id: string
+          p_amount: number
+          p_description?: string
+          p_disclosure_id?: string
+          p_showing_id?: string
+          p_type: Database["public"]["Enums"]["transaction_type"]
+          p_user_id: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       bounty_status: "open" | "claimed" | "completed" | "expired"
+      confirmation_status:
+        | "pending"
+        | "agent_confirmed"
+        | "buyer_confirmed"
+        | "both_confirmed"
+        | "cancelled"
       report_status: "pending" | "processing" | "complete" | "failed"
       showing_status: "bidding" | "awarded" | "confirmed" | "completed"
+      transaction_type:
+        | "disclosure_upload"
+        | "showing_win"
+        | "showing_deduction"
+        | "manual_adjustment"
       user_type: "Buyer" | "Agent"
     }
     CompositeTypes: {
@@ -528,8 +601,21 @@ export const Constants = {
   public: {
     Enums: {
       bounty_status: ["open", "claimed", "completed", "expired"],
+      confirmation_status: [
+        "pending",
+        "agent_confirmed",
+        "buyer_confirmed",
+        "both_confirmed",
+        "cancelled",
+      ],
       report_status: ["pending", "processing", "complete", "failed"],
       showing_status: ["bidding", "awarded", "confirmed", "completed"],
+      transaction_type: [
+        "disclosure_upload",
+        "showing_win",
+        "showing_deduction",
+        "manual_adjustment",
+      ],
       user_type: ["Buyer", "Agent"],
     },
   },
