@@ -11,11 +11,14 @@ import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 
 const Home = () => {
   const [address, setAddress] = useState('');
+  const [addressDetails, setAddressDetails] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleAnalyze = async () => {
-    if (!address.trim()) {
+  const handleAnalyze = async (addressToAnalyze?: string) => {
+    const targetAddress = addressToAnalyze || address;
+    
+    if (!targetAddress.trim()) {
       toast({
         title: "Address Required",
         description: "Please enter a property address to analyze",
@@ -31,7 +34,7 @@ const Home = () => {
       const { data: existingProperty, error: searchError } = await supabase
         .from('properties')
         .select('*')
-        .ilike('full_address', `%${address.trim()}%`)
+        .ilike('full_address', `%${targetAddress.trim()}%`)
         .single();
 
       if (searchError && searchError.code !== 'PGRST116') {
@@ -43,16 +46,24 @@ const Home = () => {
       if (existingProperty) {
         propertyId = existingProperty.id;
       } else {
-        // Create new property
+        // Create new property with structured address data if available
+        const insertData = addressDetails ? {
+          full_address: targetAddress.trim(),
+          street_address: addressDetails.street_address || targetAddress.trim(),
+          city: addressDetails.city || 'Unknown',
+          state: addressDetails.state || 'Unknown',
+          zip_code: addressDetails.zip_code || '00000'
+        } : {
+          full_address: targetAddress.trim(),
+          street_address: targetAddress.trim(),
+          city: 'Unknown',
+          state: 'Unknown',
+          zip_code: '00000'
+        };
+
         const { data: newProperty, error: createError } = await supabase
           .from('properties')
-          .insert({
-            full_address: address.trim(),
-            street_address: address.trim(),
-            city: 'Newtown',
-            state: 'CT',
-            zip_code: '06470'
-          })
+          .insert(insertData)
           .select('id')
           .single();
 
@@ -99,15 +110,16 @@ const Home = () => {
                     onChange={setAddress}
                     onAddressSelect={(addressDetails) => {
                       setAddress(addressDetails.full_address);
-                      // Auto-trigger analysis when address is selected
-                      setTimeout(() => handleAnalyze(), 100);
+                      setAddressDetails(addressDetails);
+                      // Auto-trigger analysis with the full formatted address
+                      handleAnalyze(addressDetails.full_address);
                     }}
                     placeholder="Enter a property address to analyze..."
                     className="text-lg h-12"
                   />
                 </div>
                 <Button 
-                  onClick={handleAnalyze}
+                  onClick={() => handleAnalyze()}
                   disabled={loading}
                   size="lg"
                   className="h-12 px-8"
