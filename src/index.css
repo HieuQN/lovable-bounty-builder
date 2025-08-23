@@ -151,4 +151,44 @@ All colors MUST be HSL.
     box-shadow: var(--shadow-lg);
     z-index: 50;
   }
+
+  /* Responsive design utilities */
+  .container {
+    @apply mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Mobile-first responsive grid */
+  .responsive-grid {
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6;
+  }
+
+  /* Mobile navigation improvements */
+  @media (max-width: 768px) {
+    .mobile-nav {
+      @apply flex-col space-y-2;
+    }
+    
+    .mobile-nav-item {
+      @apply w-full text-center py-2 px-4 rounded-md;
+    }
+  }
+
+  /* Text responsive sizing */
+  .responsive-title {
+    @apply text-2xl sm:text-3xl md:text-4xl lg:text-5xl;
+  }
+
+  .responsive-subtitle {
+    @apply text-lg sm:text-xl md:text-2xl;
+  }
+
+  /* Button responsive sizing */
+  .responsive-button {
+    @apply px-4 py-2 sm:px-6 sm:py-3 text-sm sm:text-base;
+  }
+
+  /* Card responsive padding */
+  .responsive-card {
+    @apply p-4 sm:p-6 lg:p-8;
+  }
 }

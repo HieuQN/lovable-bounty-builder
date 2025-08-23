@@ -14,13 +14,15 @@ import { AddressAutocomplete } from './AddressAutocomplete';
 interface UploadDisclosureModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onUploadSuccess: () => void;
+  onSuccess: () => void;
+  bountyId?: string;
 }
 
 export const UploadDisclosureModal = ({ 
   isOpen, 
   onClose, 
-  onUploadSuccess 
+  onSuccess,
+  bountyId
 }: UploadDisclosureModalProps) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -174,7 +176,7 @@ export const UploadDisclosureModal = ({
         description: "You've earned 10 credits for this new disclosure",
       });
 
-      onUploadSuccess();
+      onSuccess();
       onClose();
     } catch (error: any) {
       console.error('Error uploading disclosure:', error);

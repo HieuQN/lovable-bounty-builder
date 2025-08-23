@@ -1084,7 +1084,7 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
       <UploadDisclosureModal
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
-        onUploadSuccess={handleUploadSuccess}
+        onSuccess={handleUploadSuccess}
       />
 
       {/* Showing Bid Modal */}

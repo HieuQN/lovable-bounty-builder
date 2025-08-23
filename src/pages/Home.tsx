@@ -28,6 +28,18 @@ const Home = () => {
       return;
     }
 
+    // Check if user is authenticated
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast({
+        title: "Sign In Required",
+        description: "Please sign in to request property analysis",
+        variant: "destructive",
+      });
+      navigate('/auth');
+      return;
+    }
+
     setLoading(true);
     
     try {
@@ -70,6 +82,19 @@ const Home = () => {
 
         if (createError) throw createError;
         propertyId = newProperty.id;
+      }
+
+      // Create disclosure bounty for the property
+      const { error: bountyError } = await supabase
+        .from('disclosure_bounties')
+        .insert({
+          property_id: propertyId,
+          requested_by_user_id: user.id,
+          status: 'open'
+        });
+
+      if (bountyError) {
+        console.error('Error creating bounty:', bountyError);
       }
 
       navigate(`/analyze/${propertyId}`);
@@ -166,58 +191,6 @@ const Home = () => {
           </div>
         </section>
       </div>
-        <div className="text-center max-w-4xl mx-auto">
-          <Badge variant="secondary" className="mb-4">
-            AI-Powered Property Intelligence
-          </Badge>
-          <h1 className="text-4xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
-            InsightHome
-          </h1>
-          <p className="text-xl text-muted-foreground mb-8 leading-relaxed">
-            Get instant analysis of property disclosure reports. Uncover potential issues, 
-            estimate costs, and gain negotiation advantages before you buy.
-          </p>
-          
-          {/* Address Input */}
-          <Card className="max-w-2xl mx-auto mb-12">
-            <CardContent className="pt-6">
-              <div className="flex flex-col sm:flex-row gap-4">
-                <div className="flex-1">
-                  <AddressAutocomplete
-                    value={address}
-                    onChange={setAddress}
-                    onAddressSelect={(addressDetails) => {
-                      setAddress(addressDetails.full_address);
-                      setAddressDetails(addressDetails);
-                      // Auto-trigger analysis with the full formatted address
-                      handleAnalyze(addressDetails.full_address);
-                    }}
-                    placeholder="Enter a property address to analyze..."
-                    className="text-lg h-12"
-                  />
-                </div>
-                <Button 
-                  onClick={() => handleAnalyze()}
-                  disabled={loading}
-                  size="lg"
-                  className="h-12 px-8"
-                >
-                  {loading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Analyzing...
-                    </>
-                  ) : (
-                    <>
-                      <Search className="w-4 h-4 mr-2" />
-                      Analyze Property
-                    </>
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
 
         {/* Features Grid */}
         <section className="container mx-auto px-4 py-20">

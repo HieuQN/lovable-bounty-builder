@@ -8,6 +8,8 @@ import Home from "./pages/Home";
 import Analyze from "./pages/Analyze";
 import Auth from "./pages/Auth";
 import BuyerDashboard from "./pages/BuyerDashboard";
+import BuyerDashboardNew from "./pages/BuyerDashboardNew";
+import AgentDashboardNew from "./pages/AgentDashboardNew";
 import ReportView from "./pages/ReportView";
 import AgentLogin from "./pages/AgentLogin";
 import UploadDisclosure from "./pages/UploadDisclosure";
@@ -29,6 +31,8 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/confirm-email" element={<EmailConfirmation />} />
             <Route path="/dashboard" element={<BuyerDashboard />} />
+            <Route path="/buyer-dashboard" element={<BuyerDashboardNew />} />
+            <Route path="/agent-dashboard-new" element={<AgentDashboardNew />} />
             <Route path="/report/:reportId" element={<ReportView />} />
             <Route path="/agent-dashboard" element={<AgentLogin />} />
             <Route path="/upload/:bountyId" element={<UploadDisclosure />} />
