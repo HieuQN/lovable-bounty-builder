@@ -109,7 +109,7 @@ const Analyze = () => {
         .from('disclosure_bounties')
         .insert({
           property_id: property.id,
-          requested_by_user_id: '00000000-0000-0000-0000-000000000000', // Placeholder UUID
+          requested_by_user_id: null, // Use null instead of fake UUID
           status: 'open'
         });
 

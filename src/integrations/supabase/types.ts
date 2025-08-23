@@ -99,7 +99,7 @@ export type Database = {
           created_at: string
           id: string
           property_id: string
-          requested_by_user_id: string
+          requested_by_user_id: string | null
           status: Database["public"]["Enums"]["bounty_status"] | null
           updated_at: string
         }
@@ -109,7 +109,7 @@ export type Database = {
           created_at?: string
           id?: string
           property_id: string
-          requested_by_user_id: string
+          requested_by_user_id?: string | null
           status?: Database["public"]["Enums"]["bounty_status"] | null
           updated_at?: string
         }
@@ -119,7 +119,7 @@ export type Database = {
           created_at?: string
           id?: string
           property_id?: string
-          requested_by_user_id?: string
+          requested_by_user_id?: string | null
           status?: Database["public"]["Enums"]["bounty_status"] | null
           updated_at?: string
         }
