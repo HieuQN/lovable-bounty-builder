@@ -62,24 +62,14 @@ const BuyerDashboard = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Fetch user's purchased reports
+      // Fetch user's purchased reports by joining purchases with disclosure_reports
       const { data: purchased, error: purchasedError } = await supabase
         .from('purchases')
         .select(`
-          *,
-          disclosure_reports!inner (
-            id,
-            property_id,
-            status,
-            report_summary_basic,
-            raw_pdf_url,
-            created_at,
-            properties (
-              full_address,
-              city,
-              state
-            )
-          )
+          id,
+          amount,
+          created_at,
+          disclosure_report_id
         `)
         .eq('user_id', user.id)
         .eq('payment_status', 'completed')
@@ -87,24 +77,40 @@ const BuyerDashboard = () => {
 
       if (purchasedError) throw purchasedError;
 
-      // Transform purchased data structure
-      const purchasedReportsData = purchased?.map(purchase => {
-        const report = purchase.disclosure_reports;
-        return {
-          id: report.id,
-          property_id: report.property_id,
-          status: report.status,
-          report_summary_basic: report.report_summary_basic,
-          raw_pdf_url: report.raw_pdf_url,
-          created_at: report.created_at,
-          properties: report.properties,
-          purchases: {
-            id: purchase.id,
-            created_at: purchase.created_at,
-            amount: purchase.amount
-          }
-        };
-      }) || [];
+      // Get the report IDs from purchases
+      const purchasedReportIds = purchased?.map(p => p.disclosure_report_id) || [];
+      
+      // Fetch the actual report data for purchased reports
+      let purchasedReportsData: PurchasedReport[] = [];
+      if (purchasedReportIds.length > 0) {
+        const { data: reports, error: reportsError } = await supabase
+          .from('disclosure_reports')
+          .select(`
+            *,
+            properties (
+              full_address,
+              city,
+              state
+            )
+          `)
+          .in('id', purchasedReportIds)
+          .eq('status', 'complete');
+
+        if (reportsError) throw reportsError;
+
+        // Merge purchase data with report data
+        purchasedReportsData = reports?.map(report => {
+          const purchase = purchased.find(p => p.disclosure_report_id === report.id);
+          return {
+            ...report,
+            purchases: purchase ? {
+              id: purchase.id,
+              created_at: purchase.created_at,
+              amount: purchase.amount
+            } : undefined
+          };
+        }) || [];
+      }
 
       // Fetch all available completed reports
       const { data: allReports, error: allReportsError } = await supabase
@@ -123,12 +129,12 @@ const BuyerDashboard = () => {
       if (allReportsError) throw allReportsError;
 
       // Get user's purchased report IDs
-      const purchasedReportIds = new Set(purchasedReportsData.map(p => p.id));
+      const purchasedReportIdsSet = new Set(purchasedReportIds);
       
       // Mark reports as purchased or not
       const availableReportsData = allReports?.map(report => ({
         ...report,
-        is_purchased: purchasedReportIds.has(report.id)
+        is_purchased: purchasedReportIdsSet.has(report.id)
       })) || [];
 
       setPurchasedReports(purchasedReportsData);

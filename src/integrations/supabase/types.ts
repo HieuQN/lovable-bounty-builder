@@ -348,7 +348,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_purchases_disclosure_report"
+            columns: ["disclosure_report_id"]
+            isOneToOne: false
+            referencedRelation: "disclosure_reports"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       showing_bids: {
         Row: {
