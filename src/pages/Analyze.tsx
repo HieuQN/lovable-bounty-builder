@@ -147,15 +147,33 @@ const Analyze = () => {
       }
 
       // Create new bounty
-      const { error: createError } = await supabase
+      const { data: newBounty, error: createError } = await supabase
         .from('disclosure_bounties')
         .insert({
           property_id: propertyId,
           requested_by_user_id: user.id,
           status: 'open'
-        });
+        })
+        .select()
+        .single();
 
       if (createError) throw createError;
+
+      // Notify agents about the new request
+      try {
+        const { error: notifyError } = await supabase.functions.invoke('notify-agents-new-request', {
+          body: {
+            propertyAddress: targetAddress.trim(),
+            bountyId: newBounty.id
+          }
+        });
+
+        if (notifyError) {
+          console.error('Error notifying agents:', notifyError);
+        }
+      } catch (notifyError) {
+        console.error('Failed to notify agents:', notifyError);
+      }
 
       toast({
         title: "Request Submitted!",
