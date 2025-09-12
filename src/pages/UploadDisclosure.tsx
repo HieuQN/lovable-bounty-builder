@@ -3,11 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
-import { Upload, Clock, FileText, ArrowLeft } from 'lucide-react';
+import { Clock, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { PDFAnalyzer } from '@/components/PDFAnalyzer';
 
 interface Bounty {
   id: string;
@@ -56,7 +56,9 @@ const UploadDisclosure = () => {
   const [bounty, setBounty] = useState<Bounty | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
+  const [analysisStarted, setAnalysisStarted] = useState(false);
+  const [analysisComplete, setAnalysisComplete] = useState(false);
+  const [reportId, setReportId] = useState<string>('');
   const [timeRemaining, setTimeRemaining] = useState<string>('');
 
   useEffect(() => {
@@ -119,36 +121,19 @@ const UploadDisclosure = () => {
     return `${hours}h ${minutes}m ${seconds}s`;
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      if (selectedFile.type !== 'application/pdf') {
-        toast({
-          title: "Invalid File Type",
-          description: "Please upload a PDF file only",
-          variant: "destructive",
-        });
-        return;
-      }
-      setFile(selectedFile);
-    }
-  };
+  const handleAnalysisStart = async () => {
+    if (!bounty) return;
 
-  const submitDisclosure = async () => {
-    if (!file || !bounty) return;
-
-    setUploading(true);
-    
     try {
-      console.log('Creating disclosure report for bounty:', bounty.id);
-      
+      setAnalysisStarted(true);
+      setUploading(true);
+
       // Create disclosure report
       const { data: report, error: reportError } = await supabase
         .from('disclosure_reports')
         .insert({
           property_id: bounty.property_id,
-          status: 'processing',
-          raw_pdf_url: `uploaded-${file.name}-${Date.now()}` // Placeholder file URL
+          status: 'pending'
         })
         .select('id')
         .single();
@@ -158,51 +143,54 @@ const UploadDisclosure = () => {
         throw reportError;
       }
 
-      console.log('Report created:', report.id);
+      setReportId(report.id);
+      return report.id;
 
-      // Update bounty status
+    } catch (error) {
+      console.error('Error creating disclosure report:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create disclosure report. Please try again.",
+        variant: "destructive",
+      });
+      setAnalysisStarted(false);
+      setUploading(false);
+      throw error;
+    }
+  };
+
+  const handleAnalysisComplete = async (result: any) => {
+    if (!bounty) return;
+
+    try {
+      // Update bounty status to completed
       const { error: bountyError } = await supabase
         .from('disclosure_bounties')
         .update({ status: 'completed' })
         .eq('id', bounty.id);
 
-      if (bountyError) {
-        console.error('Error updating bounty:', bountyError);
-        throw bountyError;
-      }
+      if (bountyError) throw bountyError;
 
-      console.log('Bounty updated to completed');
-
-      // Call the edge function to process the analysis
-      console.log('Calling process-analysis function...');
-      const { error: functionError } = await supabase.functions.invoke('process-analysis', {
-        body: { 
-          reportId: report.id,
-          propertyAddress: bounty.properties?.full_address 
-        }
-      });
-
-      if (functionError) {
-        console.error('Error calling process-analysis function:', functionError);
-        // Don't throw here - the report is created, analysis will just be delayed
-      } else {
-        console.log('Process-analysis function called successfully');
-      }
+      setAnalysisComplete(true);
+      setUploading(false);
 
       toast({
-        title: "Upload Successful!",
-        description: "Your disclosure has been submitted for analysis. Processing will complete in about 15 seconds.",
+        title: "Success!",
+        description: "Disclosure analysis completed successfully!",
       });
 
-      navigate('/agent-dashboard');
+      // Navigate back to dashboard after a short delay
+      setTimeout(() => {
+        navigate('/agent-dashboard-new');
+      }, 2000);
+
     } catch (error) {
-      console.error('Error submitting disclosure:', error);
+      console.error('Error updating bounty:', error);
       toast({
-        title: "Upload Failed",
-        description: "Failed to submit disclosure. Please try again.",
+        title: "Error",
+        description: "Analysis completed but failed to update bounty status.",
         variant: "destructive",
       });
-    } finally {
       setUploading(false);
     }
   };
@@ -271,67 +259,60 @@ const UploadDisclosure = () => {
             </CardContent>
           </Card>
 
-          {/* Upload Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="w-5 h-5" />
-                Disclosure Document Upload
-              </CardTitle>
-              <CardDescription>
-                Upload the property disclosure PDF document for AI analysis
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div>
-                <Input
-                  type="file"
-                  accept=".pdf"
-                  onChange={handleFileChange}
-                  disabled={isExpired || uploading}
-                  className="cursor-pointer"
+          {/* PDF Analysis Section */}
+          {!isExpired && (
+            <>
+              {!analysisStarted ? (
+                <PDFAnalyzer
+                  reportId={reportId}
+                  onAnalysisStart={handleAnalysisStart}
+                  onAnalysisComplete={handleAnalysisComplete}
                 />
-                <p className="text-sm text-muted-foreground mt-2">
-                  Only PDF files are accepted. Max file size: 10MB
-                </p>
-              </div>
-
-              {file && (
-                <div className="p-4 bg-muted rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <FileText className="w-4 h-4" />
-                    <span className="font-medium">{file.name}</span>
-                    <Badge variant="secondary">{(file.size / 1024 / 1024).toFixed(2)} MB</Badge>
-                  </div>
-                </div>
+              ) : analysisComplete ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <div className="text-green-600 text-xl font-semibold mb-2">
+                      ✅ Analysis Complete!
+                    </div>
+                    <p className="text-muted-foreground">
+                      Redirecting to dashboard...
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                    <div className="text-lg font-semibold mb-2">
+                      Analyzing PDF...
+                    </div>
+                    <p className="text-muted-foreground">
+                      This may take up to 30 seconds. Please don't close this page.
+                    </p>
+                  </CardContent>
+                </Card>
               )}
-
-              <Button
-                onClick={submitDisclosure}
-                disabled={!file || isExpired || uploading}
-                size="lg"
-                className="w-full"
-              >
-                {uploading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Processing Upload...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-4 h-4 mr-2" />
-                    Submit Disclosure
-                  </>
-                )}
-              </Button>
-
-              <div className="text-sm text-muted-foreground space-y-2">
+              
+              <div className="text-sm text-muted-foreground space-y-2 mt-4">
                 <p>• You will earn 10 credits once the document is processed</p>
-                <p>• Analysis typically completes within 2-3 minutes</p>
+                <p>• Analysis uses advanced AI to identify property risks and issues</p>
                 <p>• Ensure the PDF is readable and contains complete disclosure information</p>
               </div>
-            </CardContent>
-          </Card>
+            </>
+          )}
+          
+          {isExpired && (
+            <Card>
+              <CardContent className="text-center py-8">
+                <div className="text-red-600 text-xl font-semibold mb-2">
+                  Claim Expired
+                </div>
+                <p className="text-muted-foreground">
+                  Your claim has expired. The bounty is now available to other agents.
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>
