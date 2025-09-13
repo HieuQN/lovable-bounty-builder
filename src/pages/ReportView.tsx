@@ -197,14 +197,26 @@ const ReportView = () => {
                         <div className="border-l-4 border-primary pl-4">
                           <div className="flex justify-between items-start mb-2">
                             <h4 className="font-semibold text-lg">{finding.category}</h4>
-                            <Badge variant={finding.risk_level === 'High' ? 'destructive' : finding.risk_level === 'Medium' ? 'secondary' : 'default'}>
-                              {finding.risk_level} Risk
-                            </Badge>
+                            <div className="flex gap-2 items-center">
+                              <Badge variant={finding.risk_level === 'high' ? 'destructive' : finding.risk_level === 'medium' ? 'secondary' : 'default'}>
+                                {finding.risk_level.charAt(0).toUpperCase() + finding.risk_level.slice(1)} Risk
+                              </Badge>
+                              {finding.source_page && (
+                                <Badge variant="outline">
+                                  Page {finding.source_page}
+                                </Badge>
+                              )}
+                            </div>
                           </div>
-                          <p className="text-muted-foreground mb-3">{finding.issue}</p>
+                          <p className="text-muted-foreground mb-3 leading-relaxed">
+                            {finding.finding || finding.issue}
+                          </p>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                              <h5 className="font-medium mb-1">Estimated Cost</h5>
+                              <h5 className="font-medium mb-1 flex items-center gap-1">
+                                <DollarSign className="w-4 h-4" />
+                                Estimated Cost
+                              </h5>
                               <p className="text-sm text-muted-foreground">{finding.estimated_cost}</p>
                             </div>
                             <div>
