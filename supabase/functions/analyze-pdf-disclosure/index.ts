@@ -31,18 +31,56 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let reportId: string | undefined;
   try {
-    const { pdfText, reportId }: AnalysisRequest = await req.json();
+    const { pdfText, reportId: requestReportId }: AnalysisRequest = await req.json();
+    reportId = requestReportId;
     console.log('Starting PDF analysis for report:', reportId);
-
-    if (!pdfText || !reportId) {
-      throw new Error('Missing required fields: pdfText and reportId');
+    
+    // Check if PDF text is too large (approximate token limit)
+    if (pdfText.length > 800000) { // ~200k tokens
+      console.log('PDF text too large, truncating...');
+      const truncatedText = pdfText.substring(0, 800000) + "\n\n[Note: Document was truncated due to size limitations]";
+      return await processPdfAnalysis(truncatedText, reportId);
     }
 
-    // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    return await processPdfAnalysis(pdfText, reportId);
+    
+  } catch (error) {
+    console.error('Error in analyze-pdf-disclosure function:', error);
+    
+    // Try to update report status to error if we have reportId
+    if (reportId) {
+      try {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        
+        await supabase
+          .from('disclosure_reports')
+          .update({ status: 'error' })
+          .eq('id', reportId);
+      } catch (updateError) {
+        console.error('Failed to update report status to error:', updateError);
+      }
+    }
+
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});
+
+async function processPdfAnalysis(pdfText: string, reportId: string) {
+  if (!pdfText || !reportId) {
+    throw new Error('Missing required fields: pdfText and reportId');
+  }
+
+  // Initialize Supabase client
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Update report status to processing
     await supabase
@@ -203,30 +241,4 @@ Return the result in the specified JSON format.`;
     }
 
     throw new Error('Failed to get response from Gemini API after retries');
-
-  } catch (error) {
-    console.error('Error in analyze-pdf-disclosure function:', error);
-    
-    // Try to update report status to error if we have reportId
-    try {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-      const supabase = createClient(supabaseUrl, supabaseServiceKey);
-      
-      const { reportId } = await (new Request(req.url, req)).json().catch(() => ({}));
-      if (reportId) {
-        await supabase
-          .from('disclosure_reports')
-          .update({ status: 'error' })
-          .eq('id', reportId);
-      }
-    } catch (updateError) {
-      console.error('Failed to update report status to error:', updateError);
-    }
-
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-});
+}
