@@ -129,16 +129,26 @@ const UploadDisclosure = () => {
       setUploading(true);
 
       // Get current user's agent profile
-      const { data: userResponse } = await supabase.auth.getUser();
-      if (!userResponse.user) throw new Error('User not authenticated');
+      const { data: userResponse, error: userError } = await supabase.auth.getUser();
+      if (userError || !userResponse.user) {
+        console.error('Auth error:', userError);
+        throw new Error('User not authenticated');
+      }
 
-      const { data: agentProfile } = await supabase
+      console.log('Current user ID:', userResponse.user.id);
+
+      const { data: agentProfile, error: agentError } = await supabase
         .from('agent_profiles')
         .select('id')
         .eq('user_id', userResponse.user.id)
         .single();
 
-      if (!agentProfile) throw new Error('Agent profile not found');
+      if (agentError || !agentProfile) {
+        console.error('Agent profile error:', agentError);
+        throw new Error('Agent profile not found. Please ensure you have an agent profile.');
+      }
+
+      console.log('Agent profile ID:', agentProfile.id);
 
       // Create disclosure report
       const { data: report, error: reportError } = await supabase
@@ -163,7 +173,7 @@ const UploadDisclosure = () => {
       console.error('Error creating disclosure report:', error);
       toast({
         title: "Error",
-        description: "Failed to create disclosure report. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to create disclosure report. Please try again.",
         variant: "destructive",
       });
       setAnalysisStarted(false);
