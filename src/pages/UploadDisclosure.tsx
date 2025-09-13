@@ -128,11 +128,24 @@ const UploadDisclosure = () => {
       setAnalysisStarted(true);
       setUploading(true);
 
+      // Get current user's agent profile
+      const { data: userResponse } = await supabase.auth.getUser();
+      if (!userResponse.user) throw new Error('User not authenticated');
+
+      const { data: agentProfile } = await supabase
+        .from('agent_profiles')
+        .select('id')
+        .eq('user_id', userResponse.user.id)
+        .single();
+
+      if (!agentProfile) throw new Error('Agent profile not found');
+
       // Create disclosure report
       const { data: report, error: reportError } = await supabase
         .from('disclosure_reports')
         .insert({
           property_id: bounty.property_id,
+          uploaded_by_agent_id: agentProfile.id,
           status: 'pending'
         })
         .select('id')
