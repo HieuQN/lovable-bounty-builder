@@ -640,7 +640,11 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
               ) : (
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {myDisclosures.map((disclosure) => (
-                    <Card key={disclosure.id} className="hover:shadow-lg transition-shadow">
+                    <Card 
+                      key={disclosure.id} 
+                      className={`hover:shadow-lg transition-shadow ${disclosure.status === 'complete' ? 'cursor-pointer' : ''}`}
+                      onClick={() => disclosure.status === 'complete' && navigate(`/report/${disclosure.id}`)}
+                    >
                       <CardHeader>
                         <div className="flex justify-between items-start">
                           <div>
@@ -672,6 +676,16 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
                             </div>
                           )}
                           <div className="flex gap-2">
+                            {disclosure.status === 'complete' && (
+                              <Button 
+                                size="sm" 
+                                onClick={() => navigate(`/report/${disclosure.id}`)}
+                                className="flex-1"
+                              >
+                                <Eye className="w-4 h-4 mr-2" />
+                                View Analysis
+                              </Button>
+                            )}
                             {disclosure.raw_pdf_url && (
                               <Button 
                                 size="sm" 
