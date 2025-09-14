@@ -84,31 +84,47 @@ const ReportView = () => {
     return summaryData;
   };
 
-  const downloadReport = () => {
+  const downloadReport = async () => {
     if (!report) return;
     
-    const reportData = {
-      property: report.properties.full_address,
-      riskScore: report.risk_score,
-      summary: report.report_summary_basic,
-      fullReport: report.report_summary_full,
-      purchaseDate: report.created_at
-    };
-    
-    const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `property-report-${report.id}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    try {
+      toast({
+        title: "Generating PDF",
+        description: "Please wait while we generate your report...",
+      });
 
-    toast({
-      title: "Download Started",
-      description: "Your report is being downloaded",
-    });
+      const { data, error } = await supabase.functions.invoke('generate-pdf-report', {
+        body: { reportId: report.id }
+      });
+
+      if (error) throw error;
+
+      // If the response is a blob, handle it directly
+      if (data instanceof Blob) {
+        const url = URL.createObjectURL(data);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `disclosure-report-${report.properties?.full_address?.replace(/[^a-zA-Z0-9]/g, '-') || 'property'}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        toast({
+          title: "Download Complete",
+          description: "Your PDF report has been downloaded",
+        });
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      toast({
+        title: "Download Failed",
+        description: "Failed to generate PDF report. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (loading || loadingData) {
