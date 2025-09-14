@@ -143,40 +143,36 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
 
   const fetchBounties = async () => {
     try {
-      // Fetch open bounties
-      const { data: openBounties, error: openError } = await supabase
-        .from('disclosure_bounties')
-        .select(`
-          *,
-          properties (
-            full_address,
-            city,
-            state
-          )
-        `)
-        .eq('status', 'open')
-        .order('created_at', { ascending: false });
+      // Use the new function that automatically resets expired claims
+      const { data: allBounties, error: bountiesError } = await supabase
+        .rpc('get_available_bounties_with_reset');
 
-      if (openError) throw openError;
+      if (bountiesError) throw bountiesError;
 
-      // Fetch claimed bounties (mock data since we don't have agent auth)
-      const { data: claimedData, error: claimedError } = await supabase
-        .from('disclosure_bounties')
-        .select(`
-          *,
-          properties (
-            full_address,
-            city,
-            state
-          )
-        `)
-        .eq('status', 'claimed')
-        .order('created_at', { ascending: false });
+      // Fetch property details for each bounty
+      const bountiesWithProperties = await Promise.all(
+        (allBounties || []).map(async (bounty) => {
+          const { data: property, error: propertyError } = await supabase
+            .from('properties')
+            .select('full_address, city, state')
+            .eq('id', bounty.property_id)
+            .single();
 
-      if (claimedError) throw claimedError;
+          if (propertyError) {
+            console.error('Error fetching property:', propertyError);
+            return { ...bounty, properties: null };
+          }
 
-      setBounties(openBounties || []);
-      setClaimedBounties(claimedData || []);
+          return { ...bounty, properties: property };
+        })
+      );
+
+      // Separate open and claimed bounties
+      const openBounties = bountiesWithProperties.filter(bounty => bounty.status === 'open');
+      const claimedBounties = bountiesWithProperties.filter(bounty => bounty.status === 'claimed');
+
+      setBounties(openBounties);
+      setClaimedBounties(claimedBounties);
     } catch (error) {
       console.error('Error fetching bounties:', error);
       toast({

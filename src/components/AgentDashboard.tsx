@@ -67,21 +67,31 @@ const AgentDashboard = () => {
 
       if (profileError && profileError.code !== 'PGRST116') throw profileError;
 
-      // Fetch available bounties
-      const { data: bountiesData, error: bountiesError } = await supabase
-        .from('disclosure_bounties')
-        .select(`
-          *,
-          properties (
-            full_address,
-            city,
-            state
-          )
-        `)
-        .in('status', ['open', 'claimed'])
-        .order('created_at', { ascending: false });
+      // Use the new function that automatically resets expired claims
+      const { data: allBounties, error: bountiesError } = await supabase
+        .rpc('get_available_bounties_with_reset');
 
       if (bountiesError) throw bountiesError;
+
+      // Fetch property details for each bounty
+      const bountiesWithProperties = await Promise.all(
+        (allBounties || []).map(async (bounty) => {
+          const { data: property, error: propertyError } = await supabase
+            .from('properties')
+            .select('full_address, city, state')
+            .eq('id', bounty.property_id)
+            .single();
+
+          if (propertyError) {
+            console.error('Error fetching property:', propertyError);
+            return { ...bounty, properties: null };
+          }
+
+          return { ...bounty, properties: property };
+        })
+      );
+
+      const bountiesData = bountiesWithProperties;
 
       // Fetch agent's disclosure reports
       let disclosuresData = [];

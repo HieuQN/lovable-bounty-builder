@@ -493,6 +493,19 @@ export type Database = {
         }
         Returns: undefined
       }
+      get_available_bounties_with_reset: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          claim_expiration: string
+          claimed_by_agent_id: string
+          created_at: string
+          id: string
+          property_id: string
+          requested_by_user_id: string
+          status: Database["public"]["Enums"]["bounty_status"]
+          updated_at: string
+        }[]
+      }
       log_credit_transaction: {
         Args: {
           p_agent_profile_id: string
