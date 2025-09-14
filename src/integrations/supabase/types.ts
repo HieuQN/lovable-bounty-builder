@@ -505,6 +505,10 @@ export type Database = {
         }
         Returns: string
       }
+      reset_expired_bounty_claims: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
     }
     Enums: {
       bounty_status: "open" | "claimed" | "completed" | "expired"
