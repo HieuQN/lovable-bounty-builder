@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/components/ui/use-toast';
-import { FileText, Clock, CheckCircle, Download, Search, ShoppingCart, Calendar } from 'lucide-react';
+import { FileText, Clock, CheckCircle, Download, Search, ShoppingCart, Calendar, Eye } from 'lucide-react';
 import PaymentModal from '@/components/PaymentModal';
 import { ShowingRequestModal } from '@/components/ShowingRequestModal';
 
