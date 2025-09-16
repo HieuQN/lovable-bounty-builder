@@ -236,6 +236,50 @@ export type Database = {
           },
         ]
       }
+      disclosure_upload_jobs: {
+        Row: {
+          agent_id: string
+          bounty_id: string
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          file_name: string
+          file_path: string
+          id: string
+          status: string
+        }
+        Insert: {
+          agent_id: string
+          bounty_id: string
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          file_name: string
+          file_path: string
+          id?: string
+          status?: string
+        }
+        Update: {
+          agent_id?: string
+          bounty_id?: string
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          file_name?: string
+          file_path?: string
+          id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "disclosure_upload_jobs_bounty_id_fkey"
+            columns: ["bounty_id"]
+            isOneToOne: false
+            referencedRelation: "disclosure_bounties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -520,6 +564,10 @@ export type Database = {
       }
       reset_expired_bounty_claims: {
         Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      update_upload_job_status: {
+        Args: { error_msg?: string; job_id: string; new_status: string }
         Returns: undefined
       }
     }

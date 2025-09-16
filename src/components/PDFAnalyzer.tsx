@@ -4,25 +4,9 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Alert, AlertDescription } from './ui/alert';
-import { Loader2, Upload, FileText, AlertCircle } from 'lucide-react';
+import { Loader2, Upload, FileText, CheckCircle, Clock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from './ui/use-toast';
-
-// Extend Window interface for pdf.js
-declare global {
-  interface Window {
-    pdfjsLib: any;
-  }
-}
-
-// Load pdf.js from a CDN
-const SCRIPT_ID = 'pdfjs-script';
-if (!document.getElementById(SCRIPT_ID)) {
-  const script = document.createElement('script');
-  script.id = SCRIPT_ID;
-  script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js";
-  document.body.appendChild(script);
-}
 
 interface PDFAnalyzerProps {
   reportId: string;
@@ -35,180 +19,267 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
   onAnalysisStart 
 }) => {
   const [file, setFile] = useState<File | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadJobId, setUploadJobId] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState('');
   const [fileName, setFileName] = useState('');
 
-  const extractTextFromPdf = useCallback((file: File) => {
-    return new Promise<Array<{page: number, text: string}>>((resolve, reject) => {
-      if (!window.pdfjsLib) {
-        return reject(new Error("PDF.js library is not loaded yet. Please try again in a moment."));
-      }
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js`;
-
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        try {
-          const typedarray = new Uint8Array(event.target!.result as ArrayBuffer);
-          const pdf = await window.pdfjsLib.getDocument({ data: typedarray }).promise;
-          const pagesText = [];
-          for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const textContent = await page.getTextContent();
-            const pageText = textContent.items.map((item: any) => item.str).join(' ');
-            pagesText.push({ page: i, text: pageText });
-          }
-          resolve(pagesText);
-        } catch (err) {
-          reject(new Error("Failed to parse PDF: " + (err as Error).message));
-        }
-      };
-      reader.onerror = () => reject(new Error("Failed to read the file."));
-      reader.readAsArrayBuffer(file);
-    });
-  }, []);
-
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
-    if (selectedFile && selectedFile.type === 'application/pdf') {
+    if (selectedFile) {
+      if (selectedFile.type !== 'application/pdf') {
+        setError('Please select a PDF file');
+        return;
+      }
+      if (selectedFile.size > 20 * 1024 * 1024) { // 20MB limit
+        setError('File size must be less than 20MB');
+        return;
+      }
       setFile(selectedFile);
       setFileName(selectedFile.name);
       setError('');
-    } else {
-      setFile(null);
-      setFileName('');
-      setError('Please select a valid PDF file.');
     }
   };
 
-  const handleAnalyze = async () => {
+  const handleUpload = useCallback(async () => {
     if (!file) {
-      setError('Please upload a PDF file first.');
-      return;
-    }
-    if (!window.pdfjsLib) {
-      setError("The PDF processing library is still loading. Please wait a moment and try again.");
+      setError('Please select a file first');
       return;
     }
 
-    setIsLoading(true);
+    setIsUploading(true);
     setError('');
 
     try {
-      // Start the analysis process and get report ID
-      const actualReportId = await onAnalysisStart();
-
-      // Extract text from PDF
-      const pages = await extractTextFromPdf(file);
-      if (!pages || pages.length === 0) {
-        throw new Error("Could not extract any text from the PDF. The document might be image-based or empty.");
+      // Get the disclosure report ID from the parent component
+      const reportId = await onAnalysisStart();
+      
+      // Get current user to identify the agent
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('User not authenticated');
       }
 
-      // Format text for API to include page markers
-      const formattedText = pages.map(p => `--- PAGE ${p.page} ---\n${p.text}`).join('\n\n');
+      // Get agent profile
+      const { data: agentProfile } = await supabase
+        .from('agent_profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
 
-      // Call our edge function for analysis
-      const { data, error: analysisError } = await supabase.functions.invoke('analyze-pdf-disclosure', {
-        body: {
-          pdfText: formattedText,
-          reportId: actualReportId
+      if (!agentProfile) {
+        throw new Error('Agent profile not found');
+      }
+
+      // Generate unique file path
+      const timestamp = new Date().getTime();
+      const fileExtension = file.name.split('.').pop();
+      const filePath = `${user.id}/${timestamp}-${reportId}.${fileExtension}`;
+
+      // Upload file to storage
+      const { error: uploadError } = await supabase.storage
+        .from('disclosure-uploads')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        throw new Error(`Upload failed: ${uploadError.message}`);
+      }
+
+      // Create upload job record
+      const { data: jobData, error: jobError } = await supabase
+        .from('disclosure_upload_jobs')
+        .insert({
+          bounty_id: reportId,
+          agent_id: agentProfile.id,
+          file_path: filePath,
+          file_name: file.name,
+          status: 'processing'
+        })
+        .select()
+        .single();
+
+      if (jobError) {
+        throw new Error(`Failed to create job: ${jobError.message}`);
+      }
+
+      setUploadJobId(jobData.id);
+      setIsProcessing(true);
+
+      // Start background processing
+      const { error: processError } = await supabase.functions.invoke(
+        'process-background-upload',
+        {
+          body: { jobId: jobData.id }
         }
-      });
+      );
 
-      if (analysisError) {
-        throw new Error(analysisError.message || 'Analysis failed');
-      }
-
-      if (!data.success) {
-        throw new Error(data.error || 'Analysis was not successful');
+      if (processError) {
+        console.error('Background processing error:', processError);
+        // Don't throw here, as the job might still succeed
       }
 
       toast({
-        title: "Analysis Complete!",
-        description: `PDF analysis completed successfully. Risk score: ${data.riskScore}/10`,
+        title: "Upload Successful",
+        description: "Your file is being processed in the background. You can leave this page.",
       });
 
-      onAnalysisComplete(data);
+      // Notify parent that upload started successfully
+      onAnalysisComplete({
+        success: true,
+        message: 'File uploaded and processing started',
+        jobId: jobData.id
+      });
 
-    } catch (err) {
-      const errorMessage = (err as Error).message || 'An unknown error occurred during analysis.';
-      setError(errorMessage);
+    } catch (error) {
+      console.error('Upload error:', error);
+      setError(error instanceof Error ? error.message : 'Upload failed');
       toast({
-        title: "Analysis Failed",
-        description: errorMessage,
+        title: "Upload Failed",
+        description: error instanceof Error ? error.message : 'Unknown error occurred',
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsUploading(false);
     }
-  };
+  }, [file, onAnalysisStart, onAnalysisComplete]);
+
+  const checkJobStatus = useCallback(async () => {
+    if (!uploadJobId) return;
+
+    try {
+      const { data: job, error } = await supabase
+        .from('disclosure_upload_jobs')
+        .select('status, error_message, completed_at')
+        .eq('id', uploadJobId)
+        .single();
+
+      if (error) {
+        console.error('Error checking job status:', error);
+        return;
+      }
+
+      if (job.status === 'completed') {
+        setIsProcessing(false);
+        toast({
+          title: "Processing Complete",
+          description: "Your disclosure report has been successfully processed.",
+        });
+        onAnalysisComplete({
+          success: true,
+          message: 'Processing completed successfully'
+        });
+      } else if (job.status === 'failed') {
+        setIsProcessing(false);
+        setError(job.error_message || 'Processing failed');
+        toast({
+          title: "Processing Failed",
+          description: job.error_message || 'Unknown error occurred during processing',
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error checking job status:', error);
+    }
+  }, [uploadJobId, onAnalysisComplete]);
+
+  // Poll job status every 5 seconds when processing
+  React.useEffect(() => {
+    if (isProcessing && uploadJobId) {
+      const interval = setInterval(checkJobStatus, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [isProcessing, uploadJobId, checkJobStatus]);
 
   return (
     <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <FileText className="h-5 w-5" />
-          PDF Disclosure Analysis
+          <Upload className="w-5 h-5" />
+          Upload Property Disclosure
         </CardTitle>
         <CardDescription>
-          Upload a property disclosure PDF to get AI-powered analysis and risk assessment
+          Upload a PDF file of the property disclosure document for AI analysis
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="pdf-upload">Select PDF Document</Label>
-          <div className="flex items-center gap-4">
-            <div className="flex-1">
+        {!isProcessing ? (
+          <>
+            <div className="grid w-full items-center gap-1.5">
+              <Label htmlFor="pdf-upload">Select PDF File</Label>
               <Input
                 id="pdf-upload"
                 type="file"
                 accept=".pdf"
                 onChange={handleFileChange}
-                disabled={isLoading}
+                disabled={isUploading}
                 className="cursor-pointer"
               />
             </div>
+
+            {fileName && (
+              <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                <FileText className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm">{fileName}</span>
+              </div>
+            )}
+
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
             <Button 
-              onClick={handleAnalyze} 
-              disabled={!file || isLoading}
-              className="min-w-[120px]"
+              onClick={handleUpload} 
+              disabled={!file || isUploading}
+              className="w-full"
             >
-              {isLoading ? (
+              {isUploading ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Analyzing...
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Uploading...
                 </>
               ) : (
                 <>
-                  <Upload className="h-4 w-4 mr-2" />
-                  Analyze
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload and Analyze
                 </>
               )}
             </Button>
+          </>
+        ) : (
+          <div className="text-center py-8">
+            <div className="flex flex-col items-center gap-4">
+              <div className="relative">
+                <Clock className="w-12 h-12 text-primary animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold">Processing in Background</h3>
+                <p className="text-muted-foreground">
+                  Your file has been uploaded and is being processed. You can safely leave this page.
+                </p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  You'll be notified when the analysis is complete.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsProcessing(false);
+                  setUploadJobId(null);
+                  setFile(null);
+                  setFileName('');
+                }}
+              >
+                Upload Another File
+              </Button>
+            </div>
           </div>
-          {fileName && (
-            <p className="text-sm text-muted-foreground">
-              Selected: {fileName}
-            </p>
-          )}
-        </div>
-
-        {error && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {isLoading && (
-          <Alert>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <AlertDescription>
-              Analyzing document, please wait... This may take up to 30 seconds.
-            </AlertDescription>
-          </Alert>
         )}
       </CardContent>
     </Card>
   );
 };
+
+export default PDFAnalyzer;
