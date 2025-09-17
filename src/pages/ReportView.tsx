@@ -7,7 +7,8 @@ import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/components/ui/use-toast';
-import { ArrowLeft, AlertTriangle, FileText, DollarSign, Download } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, FileText, DollarSign, Download, Calendar } from 'lucide-react';
+import { ShowingRequestModal } from '@/components/ShowingRequestModal';
 
 interface Property {
   id: string;
@@ -33,6 +34,7 @@ const ReportView = () => {
   const { user, loading } = useAuth();
   const [report, setReport] = useState<DisclosureReport | null>(null);
   const [loadingData, setLoadingData] = useState(true);
+  const [isShowingModalOpen, setIsShowingModalOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -127,6 +129,33 @@ const ReportView = () => {
     }
   };
 
+  const handleShowingRequest = () => {
+    setIsShowingModalOpen(true);
+  };
+
+  const formatRiskAssessment = (summary: string) => {
+    try {
+      const parsed = JSON.parse(summary);
+      if (parsed.findings) {
+        return parsed.findings.map((finding: any, index: number) => (
+          <li key={index} className="flex items-start gap-2 mb-2">
+            <span className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
+              finding.risk_level === 'high' ? 'bg-red-500' : 
+              finding.risk_level === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
+            }`}></span>
+            <span className="text-sm">
+              <strong>{finding.category}:</strong> {finding.finding || finding.issue}
+            </span>
+          </li>
+        ));
+      }
+    } catch (e) {
+      // Fallback to simple text
+      return [<li key="basic" className="text-sm">{summary}</li>];
+    }
+    return [<li key="basic" className="text-sm">{summary}</li>];
+  };
+
   if (loading || loadingData) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -164,10 +193,16 @@ const ReportView = () => {
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Dashboard
             </Button>
-            <Button onClick={downloadReport} variant="outline">
-              <Download className="w-4 h-4 mr-2" />
-              Download Report
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={handleShowingRequest} variant="default">
+                <Calendar className="w-4 h-4 mr-2" />
+                Book Showing
+              </Button>
+              <Button onClick={downloadReport} variant="outline">
+                <Download className="w-4 h-4 mr-2" />
+                Download Report
+              </Button>
+            </div>
           </div>
 
           <div className="mb-8">
@@ -193,7 +228,9 @@ const ReportView = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground">{report.report_summary_basic}</p>
+                <ul className="space-y-2">
+                  {formatRiskAssessment(report.report_summary_basic)}
+                </ul>
               </CardContent>
             </Card>
 
@@ -268,6 +305,27 @@ const ReportView = () => {
           </div>
         </div>
       </div>
+      
+      {report && (
+        <ShowingRequestModal
+          isOpen={isShowingModalOpen}
+          onClose={() => setIsShowingModalOpen(false)}
+          property={{
+            id: report.property_id,
+            full_address: report.properties.full_address,
+            city: report.properties.city,
+            state: report.properties.state
+          }}
+          userCredits={100}
+          onRequestSuccess={() => {
+            setIsShowingModalOpen(false);
+            toast({
+              title: "Showing Requested",
+              description: "Your showing request has been submitted successfully.",
+            });
+          }}
+        />
+      )}
     </div>
   );
 };

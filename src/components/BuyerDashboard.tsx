@@ -50,6 +50,7 @@ const BuyerDashboard = () => {
   const [purchasedReports, setPurchasedReports] = useState<PurchasedReport[]>([]);
   const [availableReports, setAvailableReports] = useState<AvailableReport[]>([]);
   const [filteredReports, setFilteredReports] = useState<AvailableReport[]>([]);
+  const [filteredPurchased, setFilteredPurchased] = useState<PurchasedReport[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [selectedReport, setSelectedReport] = useState<AvailableReport | null>(null);
@@ -113,6 +114,7 @@ const BuyerDashboard = () => {
 
       setAvailableReports(available);
       setFilteredReports(available);
+      setFilteredPurchased(purchased);
 
     } catch (error) {
       console.error('Error fetching reports:', error);
@@ -129,16 +131,25 @@ const BuyerDashboard = () => {
   useEffect(() => {
     if (searchQuery.trim() === '') {
       setFilteredReports(availableReports);
+      setFilteredPurchased(purchasedReports);
     } else {
-      const filtered = availableReports.filter(report => 
+      const filteredAvailable = availableReports.filter(report => 
         report.properties?.full_address.toLowerCase().includes(searchQuery.toLowerCase()) ||
         report.properties?.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
         report.properties?.state.toLowerCase().includes(searchQuery.toLowerCase()) ||
         report.report_summary_basic.toLowerCase().includes(searchQuery.toLowerCase())
       );
-      setFilteredReports(filtered);
+      setFilteredReports(filteredAvailable);
+      
+      const filteredPurch = purchasedReports.filter(report => 
+        report.properties?.full_address.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        report.properties?.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        report.properties?.state.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        report.report_summary_basic.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setFilteredPurchased(filteredPurch);
     }
-  }, [searchQuery, availableReports]);
+  }, [searchQuery, availableReports, purchasedReports]);
 
   const viewReport = (reportId: string, propertyId: string) => {
     window.open(`/report/${reportId}`, '_blank');
@@ -195,22 +206,78 @@ const BuyerDashboard = () => {
     );
   }
 
+  const parseRiskCounts = (summary: string) => {
+    try {
+      const parsed = JSON.parse(summary);
+      if (parsed.findings) {
+        const high = parsed.findings.filter((f: any) => f.risk_level === 'high').length;
+        const medium = parsed.findings.filter((f: any) => f.risk_level === 'medium').length;
+        const low = parsed.findings.filter((f: any) => f.risk_level === 'low').length;
+        
+        const examples = {
+          high: parsed.findings.find((f: any) => f.risk_level === 'high')?.category || 'None',
+          medium: parsed.findings.find((f: any) => f.risk_level === 'medium')?.category || 'None', 
+          low: parsed.findings.find((f: any) => f.risk_level === 'low')?.category || 'None'
+        };
+        
+        return { high, medium, low, examples };
+      }
+    } catch (e) {
+      console.error('Error parsing risk summary:', e);
+    }
+    return { high: 0, medium: 0, low: 0, examples: { high: 'None', medium: 'None', low: 'None' } };
+  };
+
+  const formatPropertyTitle = (address: string, city: string, state: string) => {
+    // Mock property details - in a real app, these would come from the database
+    const bedrooms = Math.floor(Math.random() * 4) + 2;
+    const bathrooms = Math.floor(Math.random() * 3) + 1;
+    const sqft = (Math.floor(Math.random() * 2000) + 1000).toLocaleString();
+    
+    return {
+      address,
+      details: `${bedrooms} bed • ${bathrooms} bath • ${sqft} sq ft`,
+      location: `${city}, ${state}`
+    };
+  };
+
   return (
     <div className="container mx-auto px-4 py-8">
+      {/* Prominent Search Bar */}
+      <div className="mb-8">
+        <div className="relative max-w-xl mx-auto">
+          <Search className="w-5 h-5 absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search properties by address, city, state, or keywords..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-12 h-12 text-lg bg-background border-2 shadow-sm"
+          />
+        </div>
+        {searchQuery && (
+          <p className="text-center text-sm text-muted-foreground mt-2">
+            Found {filteredReports.length + filteredPurchased.length} properties matching "{searchQuery}"
+          </p>
+        )}
+      </div>
+
       <Tabs defaultValue="purchased" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="purchased">My Reports</TabsTrigger>
           <TabsTrigger value="available">Available Reports</TabsTrigger>
+          <TabsTrigger value="compare">Compare Properties</TabsTrigger>
+          <TabsTrigger value="upcoming">Upcoming Showings</TabsTrigger>
+          <TabsTrigger value="completed">Completed Showings</TabsTrigger>
         </TabsList>
 
         <TabsContent value="purchased" className="mt-6">
           <div className="grid gap-6">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold">My Purchased Reports</h2>
-              <Badge variant="secondary">{purchasedReports.length} Reports</Badge>
+              <Badge variant="secondary">{filteredPurchased.length} Reports</Badge>
             </div>
 
-            {purchasedReports.length === 0 ? (
+            {filteredPurchased.length === 0 ? (
               <Card>
                 <CardContent className="pt-6 text-center">
                   <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
@@ -227,29 +294,54 @@ const BuyerDashboard = () => {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid gap-4">
-                {purchasedReports.map((report) => (
-                  <Card key={report.id}>
-                    <CardHeader>
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <CardTitle className="text-lg">
-                            {report.properties?.full_address}
-                          </CardTitle>
-                          <CardDescription>
-                            Purchased on {new Date(report.purchases?.created_at || '').toLocaleDateString()}
-                          </CardDescription>
+              <div className="grid gap-4 max-h-96 overflow-y-auto">
+                {filteredPurchased.map((report) => {
+                  const propertyInfo = formatPropertyTitle(
+                    report.properties?.full_address || '',
+                    report.properties?.city || '',
+                    report.properties?.state || ''
+                  );
+                  const riskCounts = parseRiskCounts(report.report_summary_basic);
+                  
+                  return (
+                    <Card key={report.id}>
+                      <CardHeader>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <CardTitle className="text-lg">
+                              {propertyInfo.address}
+                            </CardTitle>
+                            <CardDescription className="font-medium">
+                              {propertyInfo.details}
+                            </CardDescription>
+                            <CardDescription className="text-xs">
+                              {propertyInfo.location} • Purchased on {new Date(report.purchases?.created_at || '').toLocaleDateString()}
+                            </CardDescription>
+                          </div>
+                          <Badge variant={report.status === 'complete' ? 'default' : 'secondary'}>
+                            <CheckCircle className="w-3 h-3 mr-1" />
+                            {report.status}
+                          </Badge>
                         </div>
-                        <Badge variant={report.status === 'complete' ? 'default' : 'secondary'}>
-                          <CheckCircle className="w-3 h-3 mr-1" />
-                          {report.status}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-muted-foreground mb-4 line-clamp-2">
-                        {report.report_summary_basic}
-                      </p>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="mb-4">
+                          <h4 className="font-medium mb-2">Risk Assessment Summary:</h4>
+                          <ul className="space-y-1 text-sm">
+                            <li className="flex justify-between">
+                              <span className="text-red-600">• High Risk Issues:</span>
+                              <span className="font-medium">{riskCounts.high} items</span>
+                            </li>
+                            <li className="flex justify-between">
+                              <span className="text-yellow-600">• Medium Risk Issues:</span>
+                              <span className="font-medium">{riskCounts.medium} items</span>
+                            </li>
+                            <li className="flex justify-between">
+                              <span className="text-green-600">• Low Risk Issues:</span>
+                              <span className="font-medium">{riskCounts.low} items</span>
+                            </li>
+                          </ul>
+                        </div>
                       <div className="flex gap-2">
                         <Button 
                           size="sm" 
@@ -275,10 +367,11 @@ const BuyerDashboard = () => {
                           Request Showing
                         </Button>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                     </CardContent>
+                   </Card>
+                 );
+               })}
+               </div>
             )}
           </div>
         </TabsContent>
@@ -312,34 +405,82 @@ const BuyerDashboard = () => {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid gap-4">
-                {filteredReports.map((report) => (
-                  <Card key={report.id}>
-                    <CardHeader>
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <CardTitle className="text-lg">
-                            {report.properties?.full_address}
-                          </CardTitle>
-                          <CardDescription>
-                            {report.properties?.city}, {report.properties?.state}
-                          </CardDescription>
+              <div className="grid gap-4 max-h-96 overflow-y-auto">
+                {filteredReports.map((report) => {
+                  const propertyInfo = formatPropertyTitle(
+                    report.properties?.full_address || '',
+                    report.properties?.city || '',
+                    report.properties?.state || ''
+                  );
+                  const riskCounts = parseRiskCounts(report.report_summary_basic);
+                  
+                  return (
+                    <Card key={report.id}>
+                      <CardHeader>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <CardTitle className="text-lg">
+                              {propertyInfo.address}
+                            </CardTitle>
+                            <CardDescription className="font-medium">
+                              {propertyInfo.details}
+                            </CardDescription>
+                            <CardDescription className="text-xs">
+                              {propertyInfo.location} • Added {new Date(report.created_at).toLocaleDateString()}
+                            </CardDescription>
+                          </div>
+                          <div className="flex gap-2">
+                            <Badge variant={report.is_purchased ? 'default' : 'secondary'}>
+                              {report.is_purchased ? 'Purchased' : 'Available'}
+                            </Badge>
+                            <Badge variant="outline">
+                              <Clock className="w-3 h-3 mr-1" />
+                              {new Date(report.created_at).toLocaleDateString()}
+                            </Badge>
+                          </div>
                         </div>
-                        <div className="flex gap-2">
-                          <Badge variant={report.is_purchased ? 'default' : 'secondary'}>
-                            {report.is_purchased ? 'Purchased' : 'Available'}
-                          </Badge>
-                          <Badge variant="outline">
-                            <Clock className="w-3 h-3 mr-1" />
-                            {new Date(report.created_at).toLocaleDateString()}
-                          </Badge>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-muted-foreground mb-4 line-clamp-2">
-                        {report.report_summary_basic}
-                      </p>
+                      </CardHeader>
+                      <CardContent>
+                        {report.is_purchased ? (
+                          <div className="mb-4">
+                            <h4 className="font-medium mb-2">Risk Assessment Summary:</h4>
+                            <ul className="space-y-1 text-sm">
+                              <li className="flex justify-between">
+                                <span className="text-red-600">• High Risk Issues:</span>
+                                <span className="font-medium">{riskCounts.high} items</span>
+                              </li>
+                              <li className="flex justify-between">
+                                <span className="text-yellow-600">• Medium Risk Issues:</span>
+                                <span className="font-medium">{riskCounts.medium} items</span>
+                              </li>
+                              <li className="flex justify-between">
+                                <span className="text-green-600">• Low Risk Issues:</span>
+                                <span className="font-medium">{riskCounts.low} items</span>
+                              </li>
+                            </ul>
+                          </div>
+                        ) : (
+                          <div className="mb-4">
+                            <h4 className="font-medium mb-2">Free Analysis Preview:</h4>
+                            <div className="grid grid-cols-3 gap-4 p-3 bg-muted rounded-lg">
+                              <div className="text-center">
+                                <div className="text-lg font-bold text-red-600">{riskCounts.high}</div>
+                                <div className="text-xs text-muted-foreground">High Risk</div>
+                                <div className="text-xs mt-1 font-medium">Ex: {riskCounts.examples.high}</div>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-lg font-bold text-yellow-600">{riskCounts.medium}</div>
+                                <div className="text-xs text-muted-foreground">Medium Risk</div>
+                                <div className="text-xs mt-1 font-medium">Ex: {riskCounts.examples.medium}</div>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-lg font-bold text-green-600">{riskCounts.low}</div>
+                                <div className="text-xs text-muted-foreground">Low Risk</div>
+                                <div className="text-xs mt-1 font-medium">Ex: {riskCounts.examples.low}</div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       <div className="flex gap-2">
                         {report.is_purchased ? (
                           <Button 
@@ -368,11 +509,48 @@ const BuyerDashboard = () => {
                         </Button>
                       </div>
                     </CardContent>
-                  </Card>
-                ))}
+                   </Card>
+                  );
+                })}
               </div>
             )}
           </div>
+        </TabsContent>
+
+        <TabsContent value="compare" className="mt-6">
+          <Card>
+            <CardContent className="pt-6 text-center">
+              <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+              <h3 className="text-lg font-semibold mb-2">Property Comparison</h3>
+              <p className="text-muted-foreground">
+                Compare multiple properties side by side. This feature will be available soon.
+              </p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="upcoming" className="mt-6">
+          <Card>
+            <CardContent className="pt-6 text-center">
+              <Calendar className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+              <h3 className="text-lg font-semibold mb-2">Upcoming Showings</h3>
+              <p className="text-muted-foreground">
+                View and manage your scheduled property showings.
+              </p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="completed" className="mt-6">
+          <Card>
+            <CardContent className="pt-6 text-center">
+              <CheckCircle className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+              <h3 className="text-lg font-semibold mb-2">Completed Showings</h3>
+              <p className="text-muted-foreground">
+                Review your past property showings and feedback.
+              </p>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
