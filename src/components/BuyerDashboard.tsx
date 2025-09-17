@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { PropertyCard } from '@/components/PropertyCard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -7,10 +8,11 @@ import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/components/ui/use-toast';
-import { FileText, Clock, CheckCircle, Download, Search, ShoppingCart, Calendar, Eye } from 'lucide-react';
+import { FileText, Clock, CheckCircle, Download, Search, ShoppingCart, Calendar, Eye, MessageCircle } from 'lucide-react';
 import PaymentModal from '@/components/PaymentModal';
 import { ShowingRequestModal } from '@/components/ShowingRequestModal';
-import { ShowingStatusButton } from '@/components/ShowingStatusButton';
+import { ShowingChat } from '@/components/ShowingChat';
+import { useShowingStatus } from '@/hooks/useShowingStatus';
 
 interface PurchasedReport {
   id: string;
@@ -58,6 +60,8 @@ const BuyerDashboard = () => {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedProperty, setSelectedProperty] = useState<AvailableReport | PurchasedReport | null>(null);
   const [isShowingModalOpen, setIsShowingModalOpen] = useState(false);
+  const [chatShowingRequest, setChatShowingRequest] = useState<any>(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -166,6 +170,39 @@ const BuyerDashboard = () => {
     setIsShowingModalOpen(true);
   };
 
+  const handleOpenChat = async (propertyId: string) => {
+    try {
+      // Fetch the showing request with agent details
+      const { data, error } = await supabase
+        .from('showing_requests')
+        .select(`
+          *,
+          properties (*),
+          agent_profiles (
+            user_id,
+            profiles (first_name, email)
+          )
+        `)
+        .eq('property_id', propertyId)
+        .eq('requested_by_user_id', user?.id)
+        .eq('status', 'awarded')
+        .single();
+
+      if (error) throw error;
+      if (data) {
+        setChatShowingRequest(data);
+        setIsChatOpen(true);
+      }
+    } catch (error) {
+      console.error('Error fetching showing request:', error);
+      toast({
+        title: "Error",
+        description: "Failed to open chat",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handlePaymentSuccess = async () => {
     if (!selectedReport) return;
 
@@ -198,14 +235,6 @@ const BuyerDashboard = () => {
       });
     }
   };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
 
   const parseRiskCounts = (summary: string) => {
     try {
@@ -241,6 +270,14 @@ const BuyerDashboard = () => {
       location: `${city}, ${state}`
     };
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -305,70 +342,20 @@ const BuyerDashboard = () => {
                   const riskCounts = parseRiskCounts(report.report_summary_basic);
                   
                   return (
-                    <Card key={report.id}>
-                      <CardHeader>
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <CardTitle className="text-lg">
-                              {propertyInfo.address}
-                            </CardTitle>
-                            <CardDescription className="font-medium">
-                              {propertyInfo.details}
-                            </CardDescription>
-                            <CardDescription className="text-xs">
-                              {propertyInfo.location} • Purchased on {new Date(report.purchases?.created_at || '').toLocaleDateString()}
-                            </CardDescription>
-                          </div>
-                          <Badge variant={report.status === 'complete' ? 'default' : 'secondary'}>
-                            <CheckCircle className="w-3 h-3 mr-1" />
-                            {report.status}
-                          </Badge>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="mb-4">
-                          <h4 className="font-medium mb-2">Risk Assessment Summary:</h4>
-                          <ul className="space-y-1 text-sm">
-                            <li className="flex justify-between">
-                              <span className="text-red-600">• High Risk Issues:</span>
-                              <span className="font-medium">{riskCounts.high} items</span>
-                            </li>
-                            <li className="flex justify-between">
-                              <span className="text-yellow-600">• Medium Risk Issues:</span>
-                              <span className="font-medium">{riskCounts.medium} items</span>
-                            </li>
-                            <li className="flex justify-between">
-                              <span className="text-green-600">• Low Risk Issues:</span>
-                              <span className="font-medium">{riskCounts.low} items</span>
-                            </li>
-                          </ul>
-                        </div>
-                      <div className="flex gap-2">
-                        <Button 
-                          size="sm" 
-                          onClick={() => viewReport(report.id, report.property_id)}
-                        >
-                          <Eye className="w-4 h-4 mr-2" />
-                          View Report
-                        </Button>
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          onClick={() => window.open(report.raw_pdf_url, '_blank')}
-                        >
-                          <Download className="w-4 h-4 mr-2" />
-                          Download
-                        </Button>
-                        <ShowingStatusButton
-                          propertyId={report.property_id}
-                          onRequestShowing={() => handleShowingRequest(report)}
-                        />
-                      </div>
-                     </CardContent>
-                   </Card>
-                 );
-               })}
-               </div>
+                    <PropertyCard
+                      key={report.id}
+                      report={report}
+                      propertyInfo={propertyInfo}
+                      riskCounts={riskCounts}
+                      onViewReport={() => viewReport(report.id, report.property_id)}
+                      onDownload={() => window.open(report.raw_pdf_url, '_blank')}
+                      onRequestShowing={() => handleShowingRequest(report)}
+                      onOpenChat={() => handleOpenChat(report.property_id)}
+                      isPurchased={true}
+                    />
+                  );
+                })}
+              </div>
             )}
           </div>
         </TabsContent>
@@ -412,97 +399,17 @@ const BuyerDashboard = () => {
                   const riskCounts = parseRiskCounts(report.report_summary_basic);
                   
                   return (
-                    <Card key={report.id}>
-                      <CardHeader>
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <CardTitle className="text-lg">
-                              {propertyInfo.address}
-                            </CardTitle>
-                            <CardDescription className="font-medium">
-                              {propertyInfo.details}
-                            </CardDescription>
-                            <CardDescription className="text-xs">
-                              {propertyInfo.location} • Added {new Date(report.created_at).toLocaleDateString()}
-                            </CardDescription>
-                          </div>
-                          <div className="flex gap-2">
-                            <Badge variant={report.is_purchased ? 'default' : 'secondary'}>
-                              {report.is_purchased ? 'Purchased' : 'Available'}
-                            </Badge>
-                            <Badge variant="outline">
-                              <Clock className="w-3 h-3 mr-1" />
-                              {new Date(report.created_at).toLocaleDateString()}
-                            </Badge>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        {report.is_purchased ? (
-                          <div className="mb-4">
-                            <h4 className="font-medium mb-2">Risk Assessment Summary:</h4>
-                            <ul className="space-y-1 text-sm">
-                              <li className="flex justify-between">
-                                <span className="text-red-600">• High Risk Issues:</span>
-                                <span className="font-medium">{riskCounts.high} items</span>
-                              </li>
-                              <li className="flex justify-between">
-                                <span className="text-yellow-600">• Medium Risk Issues:</span>
-                                <span className="font-medium">{riskCounts.medium} items</span>
-                              </li>
-                              <li className="flex justify-between">
-                                <span className="text-green-600">• Low Risk Issues:</span>
-                                <span className="font-medium">{riskCounts.low} items</span>
-                              </li>
-                            </ul>
-                          </div>
-                        ) : (
-                          <div className="mb-4">
-                            <h4 className="font-medium mb-2">Free Analysis Preview:</h4>
-                            <div className="grid grid-cols-3 gap-4 p-3 bg-muted rounded-lg">
-                              <div className="text-center">
-                                <div className="text-lg font-bold text-red-600">{riskCounts.high}</div>
-                                <div className="text-xs text-muted-foreground">High Risk</div>
-                                <div className="text-xs mt-1 font-medium">Ex: {riskCounts.examples.high}</div>
-                              </div>
-                              <div className="text-center">
-                                <div className="text-lg font-bold text-yellow-600">{riskCounts.medium}</div>
-                                <div className="text-xs text-muted-foreground">Medium Risk</div>
-                                <div className="text-xs mt-1 font-medium">Ex: {riskCounts.examples.medium}</div>
-                              </div>
-                              <div className="text-center">
-                                <div className="text-lg font-bold text-green-600">{riskCounts.low}</div>
-                                <div className="text-xs text-muted-foreground">Low Risk</div>
-                                <div className="text-xs mt-1 font-medium">Ex: {riskCounts.examples.low}</div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      <div className="flex gap-2">
-                        {report.is_purchased ? (
-                          <Button 
-                            size="sm" 
-                            onClick={() => viewReport(report.id, report.property_id)}
-                          >
-                            <Eye className="w-4 h-4 mr-2" />
-                            View Report
-                          </Button>
-                        ) : (
-                          <Button 
-                            size="sm" 
-                            onClick={() => handlePurchase(report)}
-                          >
-                            <ShoppingCart className="w-4 h-4 mr-2" />
-                            Purchase Report
-                          </Button>
-                        )}
-                        <ShowingStatusButton
-                          propertyId={report.property_id}
-                          onRequestShowing={() => handleShowingRequest(report)}
-                        />
-                      </div>
-                    </CardContent>
-                   </Card>
+                    <PropertyCard
+                      key={report.id}
+                      report={report}
+                      propertyInfo={propertyInfo}
+                      riskCounts={riskCounts}
+                      onViewReport={() => viewReport(report.id, report.property_id)}
+                      onPurchase={() => handlePurchase(report)}
+                      onRequestShowing={() => handleShowingRequest(report)}
+                      onOpenChat={() => handleOpenChat(report.property_id)}
+                      isPurchased={false}
+                    />
                   );
                 })}
               </div>
@@ -573,6 +480,19 @@ const BuyerDashboard = () => {
             setSelectedProperty(null);
           }}
         />
+      )}
+
+      {/* Chat Interface */}
+      {isChatOpen && chatShowingRequest && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <ShowingChat
+            showingRequest={chatShowingRequest}
+            onClose={() => {
+              setIsChatOpen(false);
+              setChatShowingRequest(null);
+            }}
+          />
+        </div>
       )}
     </div>
   );

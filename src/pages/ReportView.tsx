@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/components/ui/use-toast';
 import { ArrowLeft, AlertTriangle, FileText, DollarSign, Download, Calendar } from 'lucide-react';
 import { ShowingRequestModal } from '@/components/ShowingRequestModal';
+import { useShowingStatus } from '@/hooks/useShowingStatus';
 import { ShowingStatusButton } from '@/components/ShowingStatusButton';
 
 interface Property {
@@ -36,6 +37,7 @@ const ReportView = () => {
   const [report, setReport] = useState<DisclosureReport | null>(null);
   const [loadingData, setLoadingData] = useState(true);
   const [isShowingModalOpen, setIsShowingModalOpen] = useState(false);
+  const { showingStatus, getButtonState } = useShowingStatus(report?.property_id || '');
 
   useEffect(() => {
     if (!loading && !user) {
@@ -131,6 +133,10 @@ const ReportView = () => {
   };
 
   const handleShowingRequest = () => {
+    if (getButtonState().canChat) {
+      // Open chat interface if agent is matched
+      return;
+    }
     setIsShowingModalOpen(true);
   };
 
