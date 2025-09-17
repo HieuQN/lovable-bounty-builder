@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/components/ui/use-toast';
 import { ArrowLeft, AlertTriangle, FileText, DollarSign, Download, Calendar } from 'lucide-react';
 import { ShowingRequestModal } from '@/components/ShowingRequestModal';
+import { ShowingStatusButton } from '@/components/ShowingStatusButton';
 
 interface Property {
   id: string;
@@ -194,10 +195,10 @@ const ReportView = () => {
               Back to Dashboard
             </Button>
             <div className="flex gap-2">
-              <Button onClick={handleShowingRequest} variant="default">
-                <Calendar className="w-4 h-4 mr-2" />
-                Book Showing
-              </Button>
+              <ShowingStatusButton
+                propertyId={report.property_id}
+                onRequestShowing={handleShowingRequest}
+              />
               <Button onClick={downloadReport} variant="outline">
                 <Download className="w-4 h-4 mr-2" />
                 Download Report

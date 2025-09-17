@@ -10,6 +10,7 @@ import { toast } from '@/components/ui/use-toast';
 import { FileText, Clock, CheckCircle, Download, Search, ShoppingCart, Calendar, Eye } from 'lucide-react';
 import PaymentModal from '@/components/PaymentModal';
 import { ShowingRequestModal } from '@/components/ShowingRequestModal';
+import { ShowingStatusButton } from '@/components/ShowingStatusButton';
 
 interface PurchasedReport {
   id: string;
@@ -358,14 +359,10 @@ const BuyerDashboard = () => {
                           <Download className="w-4 h-4 mr-2" />
                           Download
                         </Button>
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          onClick={() => handleShowingRequest(report)}
-                        >
-                          <Calendar className="w-4 h-4 mr-2" />
-                          Request Showing
-                        </Button>
+                        <ShowingStatusButton
+                          propertyId={report.property_id}
+                          onRequestShowing={() => handleShowingRequest(report)}
+                        />
                       </div>
                      </CardContent>
                    </Card>
@@ -499,14 +496,10 @@ const BuyerDashboard = () => {
                             Purchase Report
                           </Button>
                         )}
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          onClick={() => handleShowingRequest(report)}
-                        >
-                          <Calendar className="w-4 h-4 mr-2" />
-                          Request Showing
-                        </Button>
+                        <ShowingStatusButton
+                          propertyId={report.property_id}
+                          onRequestShowing={() => handleShowingRequest(report)}
+                        />
                       </div>
                     </CardContent>
                    </Card>
