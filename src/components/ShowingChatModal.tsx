@@ -47,19 +47,32 @@ export const ShowingChatModal = ({ showingRequest, isOpen, onClose }: ShowingCha
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isAgent, setIsAgent] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isOpen && showingRequest.id) {
+      checkUserType();
       fetchMessages();
-      subscribeToMessages();
+      const cleanup = subscribeToMessages();
+      return cleanup;
     }
   }, [isOpen, showingRequest.id]);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+useEffect(() => {
+  scrollToBottom();
+}, [messages]);
+
+const checkUserType = async () => {
+  if (!user) return;
+  const { data } = await supabase
+    .from('agent_profiles')
+    .select('id')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  setIsAgent(!!data);
+};
 
   const fetchMessages = async () => {
     try {
@@ -118,7 +131,7 @@ export const ShowingChatModal = ({ showingRequest, isOpen, onClose }: ShowingCha
         .insert({
           showing_request_id: showingRequest.id,
           sender_id: user.id,
-          sender_type: 'buyer',
+          sender_type: isAgent ? 'agent' : 'buyer',
           message_text: newMessage.trim()
         });
 
