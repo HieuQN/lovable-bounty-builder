@@ -172,33 +172,35 @@ const BuyerDashboard = () => {
 
   const handleOpenChat = async (propertyId: string) => {
     try {
-      // Fetch the showing request with agent details
       const { data, error } = await supabase
         .from('showing_requests')
         .select(`
           *,
-          properties (*),
-          agent_profiles (
-            user_id,
-            profiles (first_name, email)
-          )
+          properties (* )
         `)
         .eq('property_id', propertyId)
         .eq('requested_by_user_id', user?.id)
-        .eq('status', 'awarded')
-        .single();
+        .not('winning_agent_id', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
       if (error) throw error;
       if (data) {
         setChatShowingRequest(data);
         setIsChatOpen(true);
+      } else {
+        toast({
+          title: 'No chat available yet',
+          description: 'Once an agent is matched, you can chat here.',
+        });
       }
     } catch (error) {
       console.error('Error fetching showing request:', error);
       toast({
-        title: "Error",
-        description: "Failed to open chat",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Failed to open chat',
+        variant: 'destructive',
       });
     }
   };
