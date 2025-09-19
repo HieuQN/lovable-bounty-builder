@@ -10,7 +10,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { ShowingBidModal } from '@/components/ShowingBidModal';
 import { UploadDisclosureModal } from '@/components/UploadDisclosureModal';
-import { Coins, MapPin, Calendar, Upload, LogOut, Clock, Gavel, FileText, Eye, Download, CheckCircle, AlertCircle } from 'lucide-react';
+import { ShowingChatModal } from '@/components/ShowingChatModal';
+import { Coins, MapPin, Calendar, Upload, LogOut, Clock, Gavel, FileText, Eye, Download, CheckCircle, AlertCircle, MessageCircle } from 'lucide-react';
 
 interface AgentDashboardProps {
   onLogout?: () => void;
@@ -98,6 +99,8 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
   const [selectedShowingRequest, setSelectedShowingRequest] = useState<ShowingRequest | null>(null);
   const [isBidModalOpen, setIsBidModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isChatModalOpen, setIsChatModalOpen] = useState(false);
+  const [selectedShowingForChat, setSelectedShowingForChat] = useState<UpcomingShowing | null>(null);
   const [agentProfile, setAgentProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -770,45 +773,60 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
                                  ? 'You confirmed - Waiting for buyer'
                                  : 'Pending confirmation'}
                              </div>
-                              {showing.confirmation_status === 'pending' ? (
-                                <Button 
-                                  size="sm" 
-                                  onClick={() => confirmShowing(showing.id)}
-                                  className="w-full"
-                                >
-                                  <CheckCircle className="w-4 h-4 mr-2" />
-                                  Confirm Showing Completed
-                                </Button>
-                              ) : showing.confirmation_status === 'agent_confirmed' ? (
-                                <Button 
-                                  size="sm" 
-                                  variant="outline"
-                                  className="w-full bg-yellow-50 text-yellow-700 border-yellow-200"
-                                  disabled
-                                >
-                                  <Clock className="w-4 h-4 mr-2 text-yellow-600" />
-                                  Waiting for Buyer
-                                </Button>
-                              ) : showing.confirmation_status === 'buyer_confirmed' ? (
-                                <Button 
-                                  size="sm" 
-                                  onClick={() => confirmShowing(showing.id)}
-                                  className="w-full bg-blue-600 hover:bg-blue-700"
-                                >
-                                  <CheckCircle className="w-4 h-4 mr-2" />
-                                  Confirm (Buyer Ready!)
-                                </Button>
-                              ) : (
-                                <Button 
-                                  size="sm" 
-                                  variant="outline"
-                                  className="w-full bg-green-50 text-green-700 border-green-200"
-                                  disabled
-                                >
-                                  <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
-                                  Completed & Credits Earned
-                                </Button>
-                              )}
+                               <div className="space-y-2">
+                                 {showing.confirmation_status === 'pending' ? (
+                                   <Button 
+                                     size="sm" 
+                                     onClick={() => confirmShowing(showing.id)}
+                                     className="w-full"
+                                   >
+                                     <CheckCircle className="w-4 h-4 mr-2" />
+                                     Confirm Showing Completed
+                                   </Button>
+                                 ) : showing.confirmation_status === 'agent_confirmed' ? (
+                                   <Button 
+                                     size="sm" 
+                                     variant="outline"
+                                     className="w-full bg-yellow-50 text-yellow-700 border-yellow-200"
+                                     disabled
+                                   >
+                                     <Clock className="w-4 h-4 mr-2 text-yellow-600" />
+                                     Waiting for Buyer
+                                   </Button>
+                                 ) : showing.confirmation_status === 'buyer_confirmed' ? (
+                                   <Button 
+                                     size="sm" 
+                                     onClick={() => confirmShowing(showing.id)}
+                                     className="w-full bg-blue-600 hover:bg-blue-700"
+                                   >
+                                     <CheckCircle className="w-4 h-4 mr-2" />
+                                     Confirm (Buyer Ready!)
+                                   </Button>
+                                 ) : (
+                                   <Button 
+                                     size="sm" 
+                                     variant="outline"
+                                     className="w-full bg-green-50 text-green-700 border-green-200"
+                                     disabled
+                                   >
+                                     <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
+                                     Completed & Credits Earned
+                                   </Button>
+                                 )}
+                                 
+                                 <Button 
+                                   size="sm" 
+                                   variant="outline"
+                                   onClick={() => {
+                                     setSelectedShowingForChat(showing);
+                                     setIsChatModalOpen(true);
+                                   }}
+                                   className="w-full"
+                                 >
+                                   <MessageCircle className="w-4 h-4 mr-2" />
+                                   Message Buyer
+                                 </Button>
+                               </div>
                            </div>
                          </div>
                       </CardContent>
@@ -1108,6 +1126,27 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
             setSelectedShowingRequest(null);
           }}
           onBidSuccess={handleBidSuccess}
+        />
+      )}
+
+      {/* Chat Modal */}
+      {selectedShowingForChat && (
+        <ShowingChatModal
+          showingRequest={{
+            id: selectedShowingForChat.id,
+            status: selectedShowingForChat.status,
+            winning_agent_id: agentProfile?.id || null,
+            properties: selectedShowingForChat.properties,
+            agent_profiles: {
+              user_id: user?.id || '',
+              profile_bio: agentProfile?.profile_bio || ''
+            }
+          }}
+          isOpen={isChatModalOpen}
+          onClose={() => {
+            setIsChatModalOpen(false);
+            setSelectedShowingForChat(null);
+          }}
         />
       )}
     </div>

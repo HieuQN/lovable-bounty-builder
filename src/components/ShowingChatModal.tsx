@@ -14,6 +14,11 @@ interface ShowingRequest {
   id: string;
   status: string;
   winning_agent_id: string | null;
+  properties?: {
+    full_address: string;
+    city: string;
+    state: string;
+  };
   agent_profiles?: {
     user_id: string;
     profile_bio: string;
