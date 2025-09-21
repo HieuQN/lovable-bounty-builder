@@ -1,9 +1,12 @@
 import { Button } from '@/components/ui/button';
 import { Link, useLocation } from 'react-router-dom';
 import { Home, Users, FileText } from 'lucide-react';
+import { NotificationBell } from './NotificationBell';
+import { useAuth } from '@/hooks/useAuth';
 
 const Navigation = () => {
   const location = useLocation();
+  const { user } = useAuth();
   
   return (
     <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -12,6 +15,7 @@ const Navigation = () => {
           InsightHome
         </Link>
         <div className="flex items-center space-x-4">
+          {user && <NotificationBell />}
           <Button 
             variant={location.pathname === '/' ? 'default' : 'ghost'} 
             asChild

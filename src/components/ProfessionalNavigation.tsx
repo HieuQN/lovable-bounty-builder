@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/navigation-menu';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
+import { NotificationBell } from './NotificationBell';
 import { cn } from '@/lib/utils';
 import {
   Home,
@@ -194,6 +195,9 @@ const ProfessionalNavigation = () => {
         <div className="flex items-center space-x-4">
           {user ? (
             <>
+              {/* Notification Bell */}
+              <NotificationBell />
+              
               {/* Dashboard Link */}
               <Button variant="ghost" size="sm" asChild className="hidden md:flex">
                 <Link to="/dashboard">
