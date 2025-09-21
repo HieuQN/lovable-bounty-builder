@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
-export interface Notification {
+interface Notification {
   id: string;
   user_id: string;
   message: string;
@@ -14,101 +14,95 @@ export interface Notification {
 }
 
 export const useNotifications = () => {
-  const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
 
-  const fetchNotifications = useCallback(async () => {
+  const fetchNotifications = async () => {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(50);
+      const { data, error } = await supabase.functions.invoke('notifications-api', {
+        method: 'GET',
+      });
 
       if (error) throw error;
 
-      setNotifications((data as Notification[]) || []);
-      setUnreadCount(data?.filter(n => !n.is_read).length || 0);
+      const result = data;
+      setNotifications(result.notifications || []);
+      setUnreadCount(result.unread_count || 0);
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  };
 
-  const markAsRead = useCallback(async (notificationId: string) => {
-    if (!user) return;
-
+  const markAsRead = async (notificationId: string) => {
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('id', notificationId)
-        .eq('user_id', user.id);
+      await fetch(`https://nehlmeomtpytwjsdunez.functions.supabase.co/notifications-api/notifications/${notificationId}/mark-as-read`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      });
 
-      if (error) throw error;
-
+      // Update local state
       setNotifications(prev => 
-        prev.map(n => 
-          n.id === notificationId ? { ...n, is_read: true } : n
+        prev.map(notif => 
+          notif.id === notificationId 
+            ? { ...notif, is_read: true }
+            : notif
         )
       );
       setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (error) {
       console.error('Error marking notification as read:', error);
     }
-  }, [user]);
+  };
 
-  const markAllAsRead = useCallback(async () => {
-    if (!user) return;
-
+  const markAllAsRead = async () => {
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('user_id', user.id)
-        .eq('is_read', false);
+      await fetch(`https://nehlmeomtpytwjsdunez.functions.supabase.co/notifications-api/notifications/mark-all-as-read`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      });
 
-      if (error) throw error;
-
+      // Update local state
       setNotifications(prev => 
-        prev.map(n => ({ ...n, is_read: true }))
+        prev.map(notif => ({ ...notif, is_read: true }))
       );
       setUnreadCount(0);
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
     }
-  }, [user]);
+  };
 
-  useEffect(() => {
-    fetchNotifications();
-  }, [fetchNotifications]);
-
-  // Set up real-time subscription
+  // Real-time subscription
   useEffect(() => {
     if (!user) return;
 
+    fetchNotifications();
+
     const channel = supabase
-      .channel('notifications-changes')
+      .channel('notifications')
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'notifications',
-          filter: `user_id=eq.${user.id}`
+          filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
           const newNotification = payload.new as Notification;
           setNotifications(prev => [newNotification, ...prev]);
-          if (!newNotification.is_read) {
-            setUnreadCount(prev => prev + 1);
-          }
+          setUnreadCount(prev => prev + 1);
         }
       )
       .on(
@@ -117,24 +111,21 @@ export const useNotifications = () => {
           event: 'UPDATE',
           schema: 'public',
           table: 'notifications',
-          filter: `user_id=eq.${user.id}`
+          filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
           const updatedNotification = payload.new as Notification;
           setNotifications(prev => 
-            prev.map(n => 
-              n.id === updatedNotification.id ? updatedNotification : n
+            prev.map(notif => 
+              notif.id === updatedNotification.id 
+                ? updatedNotification 
+                : notif
             )
           );
           
-          // Recalculate unread count
-          const oldNotification = payload.old as Notification;
-          if (oldNotification.is_read !== updatedNotification.is_read) {
-            if (updatedNotification.is_read) {
-              setUnreadCount(prev => Math.max(0, prev - 1));
-            } else {
-              setUnreadCount(prev => prev + 1);
-            }
+          // Update unread count if notification was marked as read
+          if (updatedNotification.is_read) {
+            setUnreadCount(prev => Math.max(0, prev - 1));
           }
         }
       )
@@ -151,6 +142,6 @@ export const useNotifications = () => {
     loading,
     markAsRead,
     markAllAsRead,
-    refetch: fetchNotifications
+    refetch: fetchNotifications,
   };
 };

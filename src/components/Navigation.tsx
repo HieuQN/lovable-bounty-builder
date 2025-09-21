@@ -1,8 +1,8 @@
 import { Button } from '@/components/ui/button';
 import { Link, useLocation } from 'react-router-dom';
 import { Home, Users, FileText } from 'lucide-react';
-import { NotificationBell } from './NotificationBell';
 import { useAuth } from '@/hooks/useAuth';
+import NotificationDropdown from './NotificationDropdown';
 
 const Navigation = () => {
   const location = useLocation();
@@ -15,7 +15,7 @@ const Navigation = () => {
           InsightHome
         </Link>
         <div className="flex items-center space-x-4">
-          {user && <NotificationBell />}
+          {user && <NotificationDropdown />}
           <Button 
             variant={location.pathname === '/' ? 'default' : 'ghost'} 
             asChild

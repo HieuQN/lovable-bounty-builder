@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/navigation-menu';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
-import { NotificationBell } from './NotificationBell';
+import NotificationDropdown from './NotificationDropdown';
 import { cn } from '@/lib/utils';
 import {
   Home,
@@ -196,7 +196,7 @@ const ProfessionalNavigation = () => {
           {user ? (
             <>
               {/* Notification Bell */}
-              <NotificationBell />
+              <NotificationDropdown />
               
               {/* Dashboard Link */}
               <Button variant="ghost" size="sm" asChild className="hidden md:flex">
