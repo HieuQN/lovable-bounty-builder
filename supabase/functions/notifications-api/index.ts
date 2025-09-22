@@ -28,11 +28,8 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    const url = new URL(req.url);
-    const pathSegments = url.pathname.split('/').filter(Boolean);
-    
-    if (req.method === 'GET' && pathSegments[pathSegments.length - 1] === 'notifications') {
-      // GET /api/notifications - Get all unread notifications
+    if (req.method === 'GET') {
+      // GET /notifications-api - Get all unread notifications
       const { data: notifications, error } = await supabaseClient
         .from('notifications')
         .select('*')
@@ -55,42 +52,44 @@ serve(async (req) => {
       );
     }
 
-    if (req.method === 'POST' && pathSegments.includes('mark-as-read')) {
-      const notificationId = pathSegments[pathSegments.indexOf('notifications') + 1];
+    if (req.method === 'POST') {
+      const body = await req.json();
       
-      // POST /api/notifications/{id}/mark-as-read
-      const { error } = await supabaseClient
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('id', notificationId)
-        .eq('user_id', user.id);
+      if (body.action === 'mark_as_read') {
+        // Mark single notification as read
+        const { error } = await supabaseClient
+          .from('notifications')
+          .update({ is_read: true })
+          .eq('id', body.notification_id)
+          .eq('user_id', user.id);
 
-      if (error) throw error;
+        if (error) throw error;
 
-      return new Response(
-        JSON.stringify({ success: true }),
-        {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
-    }
+        return new Response(
+          JSON.stringify({ success: true }),
+          {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
 
-    if (req.method === 'POST' && pathSegments.includes('mark-all-as-read')) {
-      // POST /api/notifications/mark-all-as-read
-      const { error } = await supabaseClient
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('user_id', user.id)
-        .eq('is_read', false);
+      if (body.action === 'mark_all_as_read') {
+        // Mark all notifications as read
+        const { error } = await supabaseClient
+          .from('notifications')
+          .update({ is_read: true })
+          .eq('user_id', user.id)
+          .eq('is_read', false);
 
-      if (error) throw error;
+        if (error) throw error;
 
-      return new Response(
-        JSON.stringify({ success: true }),
-        {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
+        return new Response(
+          JSON.stringify({ success: true }),
+          {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
     }
 
     // If no route matches

@@ -11,7 +11,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { ShowingBidModal } from '@/components/ShowingBidModal';
 import { UploadDisclosureModal } from '@/components/UploadDisclosureModal';
 import { ShowingChatModal } from '@/components/ShowingChatModal';
-import { Coins, MapPin, Calendar, Upload, LogOut, Clock, Gavel, FileText, Eye, Download, CheckCircle, AlertCircle, MessageCircle } from 'lucide-react';
+import { Coins, MapPin, Calendar, Upload, LogOut, Clock, Gavel, FileText, Eye, Download, CheckCircle, AlertCircle, MessageCircle, Bell } from 'lucide-react';
+import NotificationDropdown from '@/components/NotificationDropdown';
 
 interface AgentDashboardProps {
   onLogout?: () => void;
@@ -487,12 +488,15 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
                 <span>{agentProfile?.brokerage_name || 'N/A'}</span>
               </div>
             </div>
-            {onLogout && (
-              <Button variant="outline" onClick={onLogout}>
-                <LogOut className="w-4 h-4 mr-2" />
-                Logout
-              </Button>
-            )}
+            <div className="flex items-center gap-4">
+              <NotificationDropdown />
+              {onLogout && (
+                <Button variant="outline" onClick={onLogout}>
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Logout
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Credit Balance Card */}

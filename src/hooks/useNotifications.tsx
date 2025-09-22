@@ -23,15 +23,20 @@ export const useNotifications = () => {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase.functions.invoke('notifications-api', {
-        method: 'GET',
-      });
+      const { data, error } = await supabase.functions.invoke('notifications-api');
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase function error:', error);
+        throw error;
+      }
 
-      const result = data;
-      setNotifications(result.notifications || []);
-      setUnreadCount(result.unread_count || 0);
+      if (!data) {
+        console.error('No data returned from notifications API');
+        return;
+      }
+
+      setNotifications(data.notifications || []);
+      setUnreadCount(data.unread_count || 0);
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
@@ -41,13 +46,11 @@ export const useNotifications = () => {
 
   const markAsRead = async (notificationId: string) => {
     try {
-      await fetch(`https://nehlmeomtpytwjsdunez.functions.supabase.co/notifications-api/notifications/${notificationId}/mark-as-read`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-          'Content-Type': 'application/json',
-        },
+      const { data, error } = await supabase.functions.invoke('notifications-api', {
+        body: { action: 'mark_as_read', notification_id: notificationId },
       });
+
+      if (error) throw error;
 
       // Update local state
       setNotifications(prev => 
@@ -65,13 +68,11 @@ export const useNotifications = () => {
 
   const markAllAsRead = async () => {
     try {
-      await fetch(`https://nehlmeomtpytwjsdunez.functions.supabase.co/notifications-api/notifications/mark-all-as-read`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-          'Content-Type': 'application/json',
-        },
+      const { data, error } = await supabase.functions.invoke('notifications-api', {
+        body: { action: 'mark_all_as_read' },
       });
+
+      if (error) throw error;
 
       // Update local state
       setNotifications(prev => 
