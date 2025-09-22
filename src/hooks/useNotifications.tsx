@@ -6,7 +6,7 @@ interface Notification {
   id: string;
   user_id: string;
   message: string;
-  type: 'message' | 'request' | 'status_update' | 'match';
+  type: string;
   is_read: boolean;
   url?: string;
   created_at: string;
@@ -23,20 +23,24 @@ export const useNotifications = () => {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase.functions.invoke('notifications-api');
+      // Fetch ALL notifications (not just unread)
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(50);
 
       if (error) {
-        console.error('Supabase function error:', error);
+        console.error('Error fetching notifications:', error);
         throw error;
       }
 
-      if (!data) {
-        console.error('No data returned from notifications API');
-        return;
-      }
+      const allNotifications = data || [];
+      const unreadNotifications = allNotifications.filter(n => !n.is_read);
 
-      setNotifications(data.notifications || []);
-      setUnreadCount(data.unread_count || 0);
+      setNotifications(allNotifications);
+      setUnreadCount(unreadNotifications.length);
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {

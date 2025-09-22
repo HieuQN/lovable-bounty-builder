@@ -13,6 +13,7 @@ import PaymentModal from '@/components/PaymentModal';
 import { ShowingRequestModal } from '@/components/ShowingRequestModal';
 import { ShowingChat } from '@/components/ShowingChat';
 import { useShowingStatus } from '@/hooks/useShowingStatus';
+import ChatList from '@/components/ChatList';
 
 interface PurchasedReport {
   id: string;
@@ -302,9 +303,10 @@ const BuyerDashboard = () => {
       </div>
 
       <Tabs defaultValue="purchased" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="purchased">My Reports</TabsTrigger>
           <TabsTrigger value="available">Available Reports</TabsTrigger>
+          <TabsTrigger value="messages">Messages</TabsTrigger>
           <TabsTrigger value="compare">Compare Properties</TabsTrigger>
           <TabsTrigger value="upcoming">Upcoming Showings</TabsTrigger>
           <TabsTrigger value="completed">Completed Showings</TabsTrigger>
@@ -417,6 +419,10 @@ const BuyerDashboard = () => {
               </div>
             )}
           </div>
+        </TabsContent>
+
+        <TabsContent value="messages" className="mt-6">
+          <ChatList userType="buyer" />
         </TabsContent>
 
         <TabsContent value="compare" className="mt-6">

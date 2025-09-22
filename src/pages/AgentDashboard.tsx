@@ -13,6 +13,7 @@ import { UploadDisclosureModal } from '@/components/UploadDisclosureModal';
 import { ShowingChatModal } from '@/components/ShowingChatModal';
 import { Coins, MapPin, Calendar, Upload, LogOut, Clock, Gavel, FileText, Eye, Download, CheckCircle, AlertCircle, MessageCircle, Bell } from 'lucide-react';
 import NotificationDropdown from '@/components/NotificationDropdown';
+import ChatList from '@/components/ChatList';
 
 interface AgentDashboardProps {
   onLogout?: () => void;
@@ -562,62 +563,70 @@ const AgentDashboard = ({ onLogout }: AgentDashboardProps) => {
 
           {/* Available Work Tabs */}
           <Tabs defaultValue="disclosures" className="w-full">
-            <TabsList className="grid w-full grid-cols-6">
-              <TabsTrigger value="disclosures" className="flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                My Disclosures
+            <TabsList className="grid w-full grid-cols-7 text-xs">
+              <TabsTrigger value="disclosures" className="flex items-center gap-1">
+                <FileText className="w-3 h-3" />
+                Disclosures
                 {myDisclosures.length > 0 && (
-                  <Badge variant="secondary" className="ml-1 h-5 text-xs">
+                  <Badge variant="secondary" className="ml-1 h-4 text-xs">
                     {myDisclosures.length}
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="showings" className="flex items-center gap-2">
-                <Calendar className="w-4 h-4" />
-                Upcoming Showings
+              <TabsTrigger value="messages" className="flex items-center gap-1">
+                <MessageCircle className="w-3 h-3" />
+                Messages
+              </TabsTrigger>
+              <TabsTrigger value="showings" className="flex items-center gap-1">
+                <Calendar className="w-3 h-3" />
+                Showings
                 {upcomingShowings.length > 0 && (
-                  <Badge variant="secondary" className="ml-1 h-5 text-xs">
+                  <Badge variant="secondary" className="ml-1 h-4 text-xs">
                     {upcomingShowings.length}
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="completed" className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4" />
-                Completed Showings
+              <TabsTrigger value="completed" className="flex items-center gap-1">
+                <CheckCircle className="w-3 h-3" />
+                Completed
                 {completedShowings.length > 0 && (
-                  <Badge variant="default" className="ml-1 h-5 text-xs bg-green-600 hover:bg-green-700">
+                  <Badge variant="default" className="ml-1 h-4 text-xs bg-green-600 hover:bg-green-700">
                     {completedShowings.length}
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="transactions" className="flex items-center gap-2">
-                <Coins className="w-4 h-4" />
-                Credit History
+              <TabsTrigger value="transactions" className="flex items-center gap-1">
+                <Coins className="w-3 h-3" />
+                Credits
                 {creditTransactions.length > 0 && (
-                  <Badge variant="secondary" className="ml-1 h-5 text-xs">
+                  <Badge variant="secondary" className="ml-1 h-4 text-xs">
                     {creditTransactions.length}
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="bounties" className="flex items-center gap-2">
-                <Upload className="w-4 h-4" />
-                Disclosure Bounties
+              <TabsTrigger value="bounties" className="flex items-center gap-1">
+                <Upload className="w-3 h-3" />
+                Bounties
                 {bounties.length > 0 && (
-                  <Badge variant="default" className="ml-1 h-5 text-xs bg-green-600 hover:bg-green-700">
+                  <Badge variant="default" className="ml-1 h-4 text-xs bg-green-600 hover:bg-green-700">
                     {bounties.length}
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="showing-bids" className="flex items-center gap-2">
-                <Gavel className="w-4 h-4" />
-                Showing Requests
+              <TabsTrigger value="showing-bids" className="flex items-center gap-1">
+                <Gavel className="w-3 h-3" />
+                Requests
                 {showingRequests.length > 0 && (
-                  <Badge variant="default" className="ml-1 h-5 text-xs bg-blue-600 hover:bg-blue-700">
+                  <Badge variant="default" className="ml-1 h-4 text-xs bg-blue-600 hover:bg-blue-700">
                     {showingRequests.length}
                   </Badge>
                 )}
               </TabsTrigger>
             </TabsList>
+
+            <TabsContent value="messages" className="mt-6">
+              <ChatList userType="agent" />
+            </TabsContent>
 
             <TabsContent value="disclosures" className="mt-6">
               <div className="flex justify-between items-center mb-4">

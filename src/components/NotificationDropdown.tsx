@@ -77,7 +77,7 @@ const NotificationDropdown = () => {
           </div>
         ) : (
           <>
-            {notifications.slice(0, 5).map((notification) => (
+            {notifications.slice(0, 10).map((notification) => (
               <DropdownMenuItem
                 key={notification.id}
                 className={`cursor-pointer p-3 ${
@@ -106,11 +106,11 @@ const NotificationDropdown = () => {
               </DropdownMenuItem>
             ))}
             
-            {notifications.length > 5 && (
+            {notifications.length > 10 && (
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-center text-sm text-muted-foreground">
-                  +{notifications.length - 5} more notifications
+                  +{notifications.length - 10} more notifications
                 </DropdownMenuItem>
               </>
             )}
