@@ -481,9 +481,21 @@ const BuyerDashboard = () => {
             setIsShowingModalOpen(false);
             setSelectedProperty(null);
           }}
-          propertyId={selectedProperty.property_id}
-          propertyAddress={selectedProperty.properties?.full_address || ''}
-          propertyAddress={selectedProperty.properties?.full_address || ''}
+          property={{
+            id: selectedProperty.property_id,
+            full_address: selectedProperty.properties?.full_address || '',
+            city: selectedProperty.properties?.city || '',
+            state: selectedProperty.properties?.state || ''
+          }}
+          userCredits={100} // Default credits - in a real app, this would come from user profile
+          onRequestSuccess={() => {
+            setIsShowingModalOpen(false);
+            setSelectedProperty(null);
+            toast({
+              title: "Showing Request Submitted",
+              description: "Your showing request has been submitted successfully!",
+            });
+          }}
         />
       )}
 
