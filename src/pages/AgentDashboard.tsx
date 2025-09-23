@@ -13,8 +13,18 @@ const AgentDashboardNew = () => {
   const [activeTab, setActiveTab] = useState('bounties');
   const [selectedShowingId, setSelectedShowingId] = useState<string | null>(null);
 
-  // Handle navigation state from notifications
+  // Handle navigation state from notifications and URL parameters
   useEffect(() => {
+    // Check URL parameters
+    const searchParams = new URLSearchParams(location.search);
+    const showingParam = searchParams.get('showing');
+    
+    if (showingParam) {
+      setActiveTab('messages');
+      setSelectedShowingId(showingParam);
+    }
+    
+    // Check navigation state from notifications
     if (location.state) {
       const { activeTab: navActiveTab, selectedShowingId: navShowingId } = location.state as any;
       if (navActiveTab) {
@@ -24,7 +34,7 @@ const AgentDashboardNew = () => {
         setSelectedShowingId(navShowingId);
       }
     }
-  }, [location.state]);
+  }, [location.search, location.state]);
 
   const renderTabContent = () => {
     switch (activeTab) {

@@ -10,8 +10,18 @@ const BuyerDashboardPage = () => {
   const [activeTab, setActiveTab] = useState('purchased');
   const [selectedShowingId, setSelectedShowingId] = useState<string | null>(null);
 
-  // Handle navigation state from notifications
+  // Handle navigation state from notifications and URL parameters
   useEffect(() => {
+    // Check URL parameters
+    const searchParams = new URLSearchParams(location.search);
+    const showingParam = searchParams.get('showing');
+    
+    if (showingParam) {
+      setActiveTab('messages');
+      setSelectedShowingId(showingParam);
+    }
+    
+    // Check navigation state from notifications
     if (location.state) {
       const { activeTab: navActiveTab, selectedShowingId: navShowingId } = location.state as any;
       if (navActiveTab) {
@@ -21,7 +31,7 @@ const BuyerDashboardPage = () => {
         setSelectedShowingId(navShowingId);
       }
     }
-  }, [location.state]);
+  }, [location.search, location.state]);
 
   const renderTabContent = () => {
     switch (activeTab) {
