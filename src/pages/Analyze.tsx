@@ -110,7 +110,12 @@ const Analyze = () => {
         .from('properties')
         .select('*')
         .ilike('full_address', `%${targetAddress.trim()}%`)
-        .single();
+        .maybeSingle();
+
+      if (searchError) {
+        console.error('Error searching for property:', searchError);
+        throw searchError;
+      }
 
       if (existingProperty) {
         propertyId = existingProperty.id;
