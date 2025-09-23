@@ -11,7 +11,6 @@ import PaymentModal from '@/components/PaymentModal';
 import { ShowingRequestModal } from '@/components/ShowingRequestModal';
 import { ShowingChat } from '@/components/ShowingChat';
 import { useShowingStatus } from '@/hooks/useShowingStatus';
-import DashboardSidebar from '@/components/DashboardSidebar';
 import ChatInbox from '@/components/ChatInbox';
 import BuyerSearchBar from '@/components/BuyerSearchBar';
 
@@ -461,12 +460,8 @@ const BuyerDashboard = ({ activeTab: propActiveTab }: BuyerDashboardProps) => {
   };
 
   return (
-    <div className="flex h-screen bg-background">
-      <DashboardSidebar userType="buyer" activeTab={activeTab} onTabChange={setActiveTab} />
-      
-      <div className="flex-1 overflow-hidden">
-        <div className="h-full overflow-y-auto p-6">{renderTabContent()}</div>
-      </div>
+    <div className="container mx-auto px-4 py-8">
+      {renderTabContent()}
 
       {selectedReport && (
         <PaymentModal
