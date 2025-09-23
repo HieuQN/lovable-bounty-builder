@@ -30,7 +30,7 @@ const AgentLogin = () => {
     return null;
   }
 
-  return <AgentDashboard onLogout={handleLogout} />;
+  return <AgentDashboard />;
 };
 
 export default AgentLogin;

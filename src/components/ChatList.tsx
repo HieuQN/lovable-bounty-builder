@@ -36,9 +36,10 @@ interface LocalShowingRequest {
 
 interface ChatListProps {
   userType: 'buyer' | 'agent';
+  onChatSelect?: (showing: LocalShowingRequest) => void;
 }
 
-const ChatList = ({ userType }: ChatListProps) => {
+const ChatList = ({ userType, onChatSelect }: ChatListProps) => {
   const { user } = useAuth();
   const [showingRequests, setShowingRequests] = useState<LocalShowingRequest[]>([]);
   const [selectedShowing, setSelectedShowing] = useState<LocalShowingRequest | null>(null);
@@ -141,8 +142,12 @@ const ChatList = ({ userType }: ChatListProps) => {
   };
 
   const openChat = (showing: LocalShowingRequest) => {
-    setSelectedShowing(showing);
-    setIsChatOpen(true);
+    if (onChatSelect) {
+      onChatSelect(showing);
+    } else {
+      setSelectedShowing(showing);
+      setIsChatOpen(true);
+    }
   };
 
   if (loading) {
@@ -235,7 +240,7 @@ const ChatList = ({ userType }: ChatListProps) => {
         ))}
       </div>
 
-      {selectedShowing && isChatOpen && (
+      {selectedShowing && isChatOpen && !onChatSelect && (
         <ShowingChat
           showingRequest={selectedShowing as any}
           onClose={() => {

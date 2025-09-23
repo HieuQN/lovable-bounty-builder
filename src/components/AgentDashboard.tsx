@@ -41,7 +41,11 @@ interface AgentProfile {
   license_number: string;
 }
 
-const AgentDashboard = () => {
+interface AgentDashboardProps {
+  activeTab?: string;
+}
+
+const AgentDashboard = ({ activeTab = 'bounties' }: AgentDashboardProps) => {
   const [bounties, setBounties] = useState<Bounty[]>([]);
   const [myDisclosures, setMyDisclosures] = useState<MyDisclosure[]>([]);
   const [agentProfile, setAgentProfile] = useState<AgentProfile | null>(null);
@@ -250,13 +254,12 @@ const AgentDashboard = () => {
         )}
       </div>
 
-      <Tabs defaultValue="bounties" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="bounties">Available Bounties</TabsTrigger>
-          <TabsTrigger value="disclosures">My Disclosures</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="bounties" className="space-y-6">
+      {activeTab === 'bounties' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-bold">Available Bounties</h2>
+            <Badge variant="secondary">{bounties.length} Bounties</Badge>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {bounties.length === 0 ? (
               <Card className="col-span-full">
@@ -326,9 +329,16 @@ const AgentDashboard = () => {
               ))
             )}
           </div>
-        </TabsContent>
+        </div>
+      )}
 
-        <TabsContent value="disclosures" className="space-y-6">
+      {activeTab === 'disclosures' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-bold">My Disclosures</h2>
+            <Badge variant="secondary">{myDisclosures.length} Disclosures</Badge>
+          </div>
+          
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {myDisclosures.length === 0 ? (
               <Card className="col-span-full">
@@ -372,8 +382,8 @@ const AgentDashboard = () => {
               ))
             )}
           </div>
-        </TabsContent>
-      </Tabs>
+        </div>
+      )}
 
       {showUploadModal && selectedBounty && (
         <UploadDisclosureModal

@@ -3,8 +3,6 @@ import { PropertyCard } from '@/components/PropertyCard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/components/ui/use-toast';
@@ -13,7 +11,9 @@ import PaymentModal from '@/components/PaymentModal';
 import { ShowingRequestModal } from '@/components/ShowingRequestModal';
 import { ShowingChat } from '@/components/ShowingChat';
 import { useShowingStatus } from '@/hooks/useShowingStatus';
-import ChatList from '@/components/ChatList';
+import DashboardSidebar from '@/components/DashboardSidebar';
+import ChatInbox from '@/components/ChatInbox';
+import BuyerSearchBar from '@/components/BuyerSearchBar';
 
 interface PurchasedReport {
   id: string;
@@ -63,6 +63,7 @@ const BuyerDashboard = () => {
   const [isShowingModalOpen, setIsShowingModalOpen] = useState(false);
   const [chatShowingRequest, setChatShowingRequest] = useState<any>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('purchased');
 
   useEffect(() => {
     if (user) {
@@ -282,150 +283,137 @@ const BuyerDashboard = () => {
     );
   }
 
-  return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Prominent Search Bar */}
-      <div className="mb-8">
-        <div className="relative max-w-xl mx-auto">
-          <Search className="w-5 h-5 absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search properties by address, city, state, or keywords..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-12 h-12 text-lg bg-background border-2 shadow-sm"
-          />
-        </div>
-        {searchQuery && (
-          <p className="text-center text-sm text-muted-foreground mt-2">
-            Found {filteredReports.length + filteredPurchased.length} properties matching "{searchQuery}"
-          </p>
-        )}
-      </div>
-
-      <Tabs defaultValue="purchased" className="w-full">
-        <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="purchased">My Reports</TabsTrigger>
-          <TabsTrigger value="available">Available Reports</TabsTrigger>
-          <TabsTrigger value="messages">Messages</TabsTrigger>
-          <TabsTrigger value="compare">Compare Properties</TabsTrigger>
-          <TabsTrigger value="upcoming">Upcoming Showings</TabsTrigger>
-          <TabsTrigger value="completed">Completed Showings</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="purchased" className="mt-6">
-          <div className="grid gap-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold">My Purchased Reports</h2>
-              <Badge variant="secondary">{filteredPurchased.length} Reports</Badge>
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'purchased':
+        return (
+          <div className="space-y-6">
+            <BuyerSearchBar />
+            
+            {/* Local Search */}
+            <div className="max-w-xl mx-auto">
+              <div className="relative">
+                <Search className="w-5 h-5 absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Filter your reports..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+              {searchQuery && (
+                <p className="text-center text-sm text-muted-foreground mt-2">
+                  Found {filteredPurchased.length} reports matching "{searchQuery}"
+                </p>
+              )}
             </div>
 
-            {filteredPurchased.length === 0 ? (
-              <Card>
-                <CardContent className="pt-6 text-center">
-                  <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                  <h3 className="text-lg font-semibold mb-2">No Purchased Reports</h3>
-                  <p className="text-muted-foreground mb-4">
-                    You haven't purchased any property disclosure reports yet.
-                  </p>
-                  <Button onClick={() => {
-                    const availableTab = document.querySelector('[value="available"]') as HTMLElement;
-                    availableTab?.click();
-                  }}>
-                    Browse Available Reports
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-4 max-h-96 overflow-y-auto">
-                {filteredPurchased.map((report) => {
-                  const propertyInfo = formatPropertyTitle(
-                    report.properties?.full_address || '',
-                    report.properties?.city || '',
-                    report.properties?.state || ''
-                  );
-                  const riskCounts = parseRiskCounts(report.report_summary_basic);
-                  
-                  return (
-                    <PropertyCard
-                      key={report.id}
-                      report={report}
-                      propertyInfo={propertyInfo}
-                      riskCounts={riskCounts}
-                      onViewReport={() => viewReport(report.id, report.property_id)}
-                      onDownload={() => window.open(report.raw_pdf_url, '_blank')}
-                      onRequestShowing={() => handleShowingRequest(report)}
-                      onOpenChat={() => handleOpenChat(report.property_id)}
-                      isPurchased={true}
-                    />
-                  );
-                })}
+            <div className="grid gap-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold">My Purchased Reports</h2>
+                <Badge variant="secondary">{filteredPurchased.length} Reports</Badge>
               </div>
-            )}
-          </div>
-        </TabsContent>
 
-        <TabsContent value="available" className="mt-6">
-          <div className="grid gap-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold">Available Property Reports</h2>
-              <div className="flex items-center gap-4">
-                <div className="relative">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="Search by address, city, or state..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 w-64"
-                  />
+              {filteredPurchased.length === 0 ? (
+                <Card>
+                  <CardContent className="pt-6 text-center">
+                    <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                    <h3 className="text-lg font-semibold mb-2">No Purchased Reports</h3>
+                    <p className="text-muted-foreground mb-4">
+                      You haven't purchased any property disclosure reports yet.
+                    </p>
+                    <Button onClick={() => setActiveTab('available')}>
+                      Browse Available Reports
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4">
+                  {filteredPurchased.map((report) => {
+                    const propertyInfo = formatPropertyTitle(
+                      report.properties?.full_address || '',
+                      report.properties?.city || '',
+                      report.properties?.state || ''
+                    );
+                    const riskCounts = parseRiskCounts(report.report_summary_basic);
+                    
+                    return (
+                      <PropertyCard
+                        key={report.id}
+                        report={report}
+                        propertyInfo={propertyInfo}
+                        riskCounts={riskCounts}
+                        onViewReport={() => viewReport(report.id, report.property_id)}
+                        onDownload={() => window.open(report.raw_pdf_url, '_blank')}
+                        onRequestShowing={() => handleShowingRequest(report)}
+                        onOpenChat={() => handleOpenChat(report.property_id)}
+                        isPurchased={true}
+                      />
+                    );
+                  })}
                 </div>
+              )}
+            </div>
+          </div>
+        );
+
+      case 'available':
+        return (
+          <div className="space-y-6">
+            <BuyerSearchBar />
+            
+            <div className="grid gap-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold">Available Property Reports</h2>
                 <Badge variant="secondary">{filteredReports.length} Reports</Badge>
               </div>
+
+              {filteredReports.length === 0 ? (
+                <Card>
+                  <CardContent className="pt-6 text-center">
+                    <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                    <h3 className="text-lg font-semibold mb-2">No Reports Found</h3>
+                    <p className="text-muted-foreground">
+                      {searchQuery ? 'No reports match your search criteria.' : 'No property reports are currently available.'}
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4">
+                  {filteredReports.map((report) => {
+                    const propertyInfo = formatPropertyTitle(
+                      report.properties?.full_address || '',
+                      report.properties?.city || '',
+                      report.properties?.state || ''
+                    );
+                    const riskCounts = parseRiskCounts(report.report_summary_basic);
+                    
+                    return (
+                      <PropertyCard
+                        key={report.id}
+                        report={report}
+                        propertyInfo={propertyInfo}
+                        riskCounts={riskCounts}
+                        onViewReport={() => viewReport(report.id, report.property_id)}
+                        onPurchase={() => handlePurchase(report)}
+                        onRequestShowing={() => handleShowingRequest(report)}
+                        onOpenChat={() => handleOpenChat(report.property_id)}
+                        isPurchased={false}
+                      />
+                    );
+                  })}
+                </div>
+              )}
             </div>
-
-            {filteredReports.length === 0 ? (
-              <Card>
-                <CardContent className="pt-6 text-center">
-                  <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                  <h3 className="text-lg font-semibold mb-2">No Reports Found</h3>
-                  <p className="text-muted-foreground">
-                    {searchQuery ? 'No reports match your search criteria.' : 'No property reports are currently available.'}
-                  </p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-4 max-h-96 overflow-y-auto">
-                {filteredReports.map((report) => {
-                  const propertyInfo = formatPropertyTitle(
-                    report.properties?.full_address || '',
-                    report.properties?.city || '',
-                    report.properties?.state || ''
-                  );
-                  const riskCounts = parseRiskCounts(report.report_summary_basic);
-                  
-                  return (
-                    <PropertyCard
-                      key={report.id}
-                      report={report}
-                      propertyInfo={propertyInfo}
-                      riskCounts={riskCounts}
-                      onViewReport={() => viewReport(report.id, report.property_id)}
-                      onPurchase={() => handlePurchase(report)}
-                      onRequestShowing={() => handleShowingRequest(report)}
-                      onOpenChat={() => handleOpenChat(report.property_id)}
-                      isPurchased={false}
-                    />
-                  );
-                })}
-              </div>
-            )}
           </div>
-        </TabsContent>
+        );
 
-        <TabsContent value="messages" className="mt-6">
-          <ChatList userType="buyer" />
-        </TabsContent>
+      case 'messages':
+        return <ChatInbox userType="buyer" />;
 
-        <TabsContent value="compare" className="mt-6">
+      case 'compare':
+        return (
           <Card>
             <CardContent className="pt-6 text-center">
               <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
@@ -435,9 +423,10 @@ const BuyerDashboard = () => {
               </p>
             </CardContent>
           </Card>
-        </TabsContent>
+        );
 
-        <TabsContent value="upcoming" className="mt-6">
+      case 'upcoming':
+        return (
           <Card>
             <CardContent className="pt-6 text-center">
               <Calendar className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
@@ -447,9 +436,10 @@ const BuyerDashboard = () => {
               </p>
             </CardContent>
           </Card>
-        </TabsContent>
+        );
 
-        <TabsContent value="completed" className="mt-6">
+      case 'completed':
+        return (
           <Card>
             <CardContent className="pt-6 text-center">
               <CheckCircle className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
@@ -459,48 +449,52 @@ const BuyerDashboard = () => {
               </p>
             </CardContent>
           </Card>
-        </TabsContent>
-      </Tabs>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="flex h-screen bg-background">
+      <DashboardSidebar userType="buyer" activeTab={activeTab} onTabChange={setActiveTab} />
+      
+      <div className="flex-1 overflow-hidden">
+        <div className="h-full overflow-y-auto p-6">{renderTabContent()}</div>
+      </div>
 
       {selectedReport && (
         <PaymentModal
           open={isPaymentModalOpen}
           onOpenChange={setIsPaymentModalOpen}
           onPaymentSuccess={handlePaymentSuccess}
-          propertyAddress={selectedReport.properties?.full_address || ''}
           amount={49.99}
+          propertyAddress={selectedReport.properties?.full_address || ''}
         />
       )}
 
       {selectedProperty && (
         <ShowingRequestModal
           isOpen={isShowingModalOpen}
-          onClose={() => setIsShowingModalOpen(false)}
-          property={{
-            id: selectedProperty.property_id,
-            full_address: selectedProperty.properties?.full_address || '',
-            city: selectedProperty.properties?.city || '',
-            state: selectedProperty.properties?.state || ''
-          }}
-          userCredits={100}
-          onRequestSuccess={() => {
+          onClose={() => {
             setIsShowingModalOpen(false);
             setSelectedProperty(null);
           }}
+          propertyId={selectedProperty.property_id}
+          propertyAddress={selectedProperty.properties?.full_address || ''}
+          propertyAddress={selectedProperty.properties?.full_address || ''}
         />
       )}
 
-      {/* Chat Interface */}
-      {isChatOpen && chatShowingRequest && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <ShowingChat
-            showingRequest={chatShowingRequest}
-            onClose={() => {
-              setIsChatOpen(false);
-              setChatShowingRequest(null);
-            }}
-          />
-        </div>
+      {chatShowingRequest && isChatOpen && (
+        <ShowingChat
+          showingRequest={chatShowingRequest}
+          onClose={() => {
+            setIsChatOpen(false);
+            setChatShowingRequest(null);
+          }}
+        />
       )}
     </div>
   );
