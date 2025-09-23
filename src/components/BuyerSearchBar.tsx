@@ -23,90 +23,84 @@ const BuyerSearchBar = () => {
   const handleAddressSelect = async (addressDetails: AddressDetails) => {
     setIsLoading(true);
     try {
-      // First, check if property already exists
+      // Search for existing property and disclosure report (same logic as Home page)
       const { data: existingProperty, error: searchError } = await supabase
         .from('properties')
-        .select('id')
-        .eq('full_address', addressDetails.full_address)
-        .maybeSingle();
+        .select(`
+          *,
+          disclosure_reports!inner(
+            id,
+            status,
+            report_summary_basic,
+            risk_score,
+            created_at
+          )
+        `)
+        .ilike('full_address', `%${addressDetails.full_address.trim()}%`)
+        .eq('disclosure_reports.status', 'complete')
+        .single();
 
-      if (searchError && searchError.code !== 'PGRST116') {
-        throw searchError;
-      }
-
-      let propertyId = existingProperty?.id;
-
-      // If property doesn't exist, create it
-      if (!existingProperty) {
-        const { data: newProperty, error: insertError } = await supabase
-          .from('properties')
-          .insert({
-            full_address: addressDetails.full_address,
-            street_address: addressDetails.street_address,
-            city: addressDetails.city,
-            state: addressDetails.state,
-            zip_code: addressDetails.zip_code,
-          })
-          .select()
-          .single();
-
-        if (insertError) throw insertError;
-        propertyId = newProperty.id;
-      }
-
-      // Check if there are any disclosure reports for this property
-      const { data: reports, error: reportsError } = await supabase
-        .from('disclosure_reports')
-        .select('id, status')
-        .eq('property_id', propertyId);
-
-      if (reportsError) throw reportsError;
-
-      if (reports && reports.length > 0) {
-        // Navigate to reports or analysis page
-        navigate('/analyze', { 
-          state: { 
-            address: addressDetails.full_address,
-            propertyId: propertyId
-          } 
-        });
+      if (existingProperty && existingProperty.disclosure_reports?.length > 0) {
+        // Navigate to existing analysis
+        navigate(`/analyze/${existingProperty.id}`);
       } else {
-        // No reports available, show message and maybe navigate to request page
-        toast({
-          title: "No Reports Available",
-          description: `No disclosure reports found for ${addressDetails.full_address}. You can request a showing or check back later.`,
-        });
-        
-        navigate('/analyze', { 
-          state: { 
-            address: addressDetails.full_address,
-            propertyId: propertyId,
-            noReports: true
-          } 
-        });
+        // No existing analysis, show request form
+        navigate(`/analyze/new?address=${encodeURIComponent(addressDetails.full_address)}`);
       }
-
     } catch (error) {
-      console.error('Error handling address search:', error);
-      toast({
-        title: "Error",
-        description: "Failed to search for property. Please try again.",
-        variant: "destructive",
-      });
+      console.error('Error searching property:', error);
+      // If no existing analysis found, show request form
+      navigate(`/analyze/new?address=${encodeURIComponent(addressDetails.full_address)}`);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSearch = () => {
-    if (searchAddress.trim()) {
-      // If user types without selecting from dropdown, still try to process
-      navigate('/analyze', { 
-        state: { 
-          address: searchAddress.trim(),
-          manual: true
-        } 
+  const handleSearch = async () => {
+    const targetAddress = searchAddress.trim();
+    
+    if (!targetAddress) {
+      toast({
+        title: "Address Required",
+        description: "Please enter a property address to search",
+        variant: "destructive",
       });
+      return;
+    }
+
+    setIsLoading(true);
+    
+    try {
+      // Search for existing property and disclosure report (same logic as Home page)
+      const { data: existingProperty, error: searchError } = await supabase
+        .from('properties')
+        .select(`
+          *,
+          disclosure_reports!inner(
+            id,
+            status,
+            report_summary_basic,
+            risk_score,
+            created_at
+          )
+        `)
+        .ilike('full_address', `%${targetAddress}%`)
+        .eq('disclosure_reports.status', 'complete')
+        .single();
+
+      if (existingProperty && existingProperty.disclosure_reports?.length > 0) {
+        // Navigate to existing analysis
+        navigate(`/analyze/${existingProperty.id}`);
+      } else {
+        // No existing analysis, show request form
+        navigate(`/analyze/new?address=${encodeURIComponent(targetAddress)}`);
+      }
+    } catch (error) {
+      console.error('Error searching property:', error);
+      // If no existing analysis found, show request form
+      navigate(`/analyze/new?address=${encodeURIComponent(targetAddress)}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -148,10 +142,6 @@ const BuyerSearchBar = () => {
             </Button>
           </div>
           
-          <div className="flex items-center justify-center mt-3 text-sm text-muted-foreground">
-            <MapPin className="w-4 h-4 mr-1" />
-            <span>Powered by Google Places API</span>
-          </div>
         </div>
       </CardContent>
     </Card>
