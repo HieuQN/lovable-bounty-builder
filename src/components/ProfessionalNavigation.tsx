@@ -198,11 +198,17 @@ const ProfessionalNavigation = () => {
               {/* Notification Bell */}
               <NotificationDropdown />
               
-              {/* Dashboard Link */}
+              {/* Dashboard Links */}
               <Button variant="ghost" size="sm" asChild className="hidden md:flex">
-                <Link to="/agent-dashboard-new">
+                <Link to="/buyer-dashboard">
+                  <User className="w-4 h-4 mr-2" />
+                  Buyer Dashboard
+                </Link>
+              </Button>
+              <Button variant="ghost" size="sm" asChild className="hidden md:flex">
+                <Link to="/agent-dashboard">
                   <BarChart3 className="w-4 h-4 mr-2" />
-                  Dashboard
+                  Agent Dashboard
                 </Link>
               </Button>
 
@@ -278,9 +284,15 @@ const ProfessionalNavigation = () => {
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link to="/auth" className="w-full">
-                <Users className="mr-2 h-4 w-4" />
-                <span>For Agents</span>
+              <Link to="/buyer-dashboard" className="w-full">
+                <User className="mr-2 h-4 w-4" />
+                <span>Buyer Dashboard</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link to="/agent-dashboard" className="w-full">
+                <BarChart3 className="mr-2 h-4 w-4" />
+                <span>Agent Dashboard</span>
               </Link>
             </DropdownMenuItem>
             {!user && (

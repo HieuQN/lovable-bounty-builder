@@ -26,12 +26,21 @@ const Navigation = () => {
             </Link>
           </Button>
           <Button 
+            variant={location.pathname === '/buyer-dashboard' ? 'default' : 'ghost'} 
+            asChild
+          >
+            <Link to="/buyer-dashboard">
+              <Users className="w-4 h-4 mr-2" />
+              Buyer Dashboard
+            </Link>
+          </Button>
+          <Button 
             variant={location.pathname === '/agent-dashboard' ? 'default' : 'ghost'} 
             asChild
           >
             <Link to="/agent-dashboard">
-              <Users className="w-4 h-4 mr-2" />
-              Agent Login
+              <FileText className="w-4 h-4 mr-2" />
+              Agent Dashboard
             </Link>
           </Button>
         </div>
