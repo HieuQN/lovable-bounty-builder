@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useAgentCounts } from '@/hooks/useAgentCounts';
 import NotificationDropdown from './NotificationDropdown';
 import { 
   Home, 
@@ -32,6 +33,7 @@ const DashboardSidebar = ({ userType, activeTab, onTabChange }: DashboardSidebar
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { user } = useAuth();
   const { unreadCount } = useNotifications();
+  const { availableBountiesCount, showingRequestsCount } = useAgentCounts();
 
   const buyerTabs = [
     { id: 'purchased', label: 'My Reports', icon: FileText },
@@ -94,6 +96,19 @@ const DashboardSidebar = ({ userType, activeTab, onTabChange }: DashboardSidebar
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           
+          // Get count for each tab
+          const getTabCount = () => {
+            if (userType === 'agent') {
+              if (tab.id === 'bounties') return availableBountiesCount;
+              if (tab.id === 'showing-requests') return showingRequestsCount;
+            }
+            if (tab.id === 'messages') return unreadCount;
+            return 0;
+          };
+
+          const tabCount = getTabCount();
+          const shouldShowBadge = tabCount > 0;
+          
           return (
             <Button
               key={tab.id}
@@ -105,19 +120,22 @@ const DashboardSidebar = ({ userType, activeTab, onTabChange }: DashboardSidebar
               {!isCollapsed && (
                 <>
                   <span>{tab.label}</span>
-                  {tab.id === 'messages' && unreadCount > 0 && (
-                    <Badge variant="destructive" className="ml-auto h-5 min-w-[20px] text-xs">
-                      {unreadCount > 99 ? '99+' : unreadCount}
+                  {shouldShowBadge && (
+                    <Badge 
+                      variant={tab.id === 'messages' ? "destructive" : "secondary"} 
+                      className="ml-auto h-5 min-w-[20px] text-xs"
+                    >
+                      {tabCount > 99 ? '99+' : tabCount}
                     </Badge>
                   )}
                 </>
               )}
-              {isCollapsed && tab.id === 'messages' && unreadCount > 0 && (
+              {isCollapsed && shouldShowBadge && (
                 <Badge 
-                  variant="destructive" 
+                  variant={tab.id === 'messages' ? "destructive" : "secondary"} 
                   className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
                 >
-                  {unreadCount > 99 ? '99+' : unreadCount}
+                  {tabCount > 99 ? '99+' : tabCount}
                 </Badge>
               )}
             </Button>
