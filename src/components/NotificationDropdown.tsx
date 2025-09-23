@@ -37,7 +37,7 @@ const NotificationDropdown = () => {
 
       if (showingId) {
         const target = isAgent
-          ? `/agent-dashboard-new?showing=${showingId}`
+          ? `/agent-dashboard-new?tab=messages&showing=${showingId}`
           : `/buyer-dashboard?showing=${showingId}`;
         return navigate(target);
       }

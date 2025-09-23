@@ -200,7 +200,7 @@ const ProfessionalNavigation = () => {
               
               {/* Dashboard Link */}
               <Button variant="ghost" size="sm" asChild className="hidden md:flex">
-                <Link to="/dashboard">
+                <Link to="/agent-dashboard-new">
                   <BarChart3 className="w-4 h-4 mr-2" />
                   Dashboard
                 </Link>
@@ -230,13 +230,13 @@ const ProfessionalNavigation = () => {
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
-                    <Link to="/dashboard" className="w-full">
+                    <Link to="/agent-dashboard-new" className="w-full">
                       <User className="mr-2 h-4 w-4" />
                       <span>Profile</span>
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link to="/dashboard" className="w-full">
+                    <Link to="/agent-dashboard-new" className="w-full">
                       <Settings className="mr-2 h-4 w-4" />
                       <span>Settings</span>
                     </Link>

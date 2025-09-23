@@ -17,7 +17,12 @@ const AgentDashboardNew = () => {
   useEffect(() => {
     // Check URL parameters
     const searchParams = new URLSearchParams(location.search);
+    const tabParam = searchParams.get('tab');
     const showingParam = searchParams.get('showing');
+    
+    if (tabParam) {
+      setActiveTab(tabParam);
+    }
     
     if (showingParam) {
       setActiveTab('messages');
