@@ -68,6 +68,13 @@ const BuyerDashboard = ({ activeTab: propActiveTab }: BuyerDashboardProps) => {
   const [chatShowingRequest, setChatShowingRequest] = useState<any>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(propActiveTab || 'purchased');
+  
+  // Update local activeTab when prop changes
+  useEffect(() => {
+    if (propActiveTab) {
+      setActiveTab(propActiveTab);
+    }
+  }, [propActiveTab]);
   const [selectedShowingId, setSelectedShowingId] = useState<string | null>(null);
 
   useEffect(() => {
