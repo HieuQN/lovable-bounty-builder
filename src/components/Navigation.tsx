@@ -28,6 +28,7 @@ const Navigation = () => {
           <Button 
             variant={location.pathname === '/buyer-dashboard' ? 'default' : 'ghost'} 
             asChild
+            className="hidden sm:flex"
           >
             <Link to="/buyer-dashboard">
               <Users className="w-4 h-4 mr-2" />
@@ -35,12 +36,31 @@ const Navigation = () => {
             </Link>
           </Button>
           <Button 
+            variant={location.pathname === '/buyer-dashboard' ? 'default' : 'ghost'} 
+            asChild
+            className="sm:hidden"
+          >
+            <Link to="/buyer-dashboard">
+              <Users className="w-4 h-4" />
+            </Link>
+          </Button>
+          <Button 
             variant={location.pathname === '/agent-dashboard' ? 'default' : 'ghost'} 
             asChild
+            className="hidden sm:flex"
           >
             <Link to="/agent-dashboard">
               <FileText className="w-4 h-4 mr-2" />
               Agent Dashboard
+            </Link>
+          </Button>
+          <Button 
+            variant={location.pathname === '/agent-dashboard' ? 'default' : 'ghost'} 
+            asChild
+            className="sm:hidden"
+          >
+            <Link to="/agent-dashboard">
+              <FileText className="w-4 h-4" />
             </Link>
           </Button>
         </div>
