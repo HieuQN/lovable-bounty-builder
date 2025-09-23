@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,16 +35,60 @@ export const UploadDisclosureModal = ({
   const [notes, setNotes] = useState('');
   const [existingDisclosure, setExistingDisclosure] = useState<any>(null);
   const [checkingExisting, setCheckingExisting] = useState(false);
+  const [addressFromBounty, setAddressFromBounty] = useState(false);
 
-  const checkForExistingDisclosure = async () => {
-    if (!fullAddress) return;
+  // Fetch bounty details and pre-populate address if bountyId is provided
+  useEffect(() => {
+    if (bountyId && isOpen) {
+      fetchBountyDetails();
+    }
+  }, [bountyId, isOpen]);
+
+  const fetchBountyDetails = async () => {
+    try {
+      const { data: bounty, error: bountyError } = await supabase
+        .from('disclosure_bounties')
+        .select(`
+          property_id,
+          properties (
+            full_address,
+            street_address,
+            city,
+            state,
+            zip_code
+          )
+        `)
+        .eq('id', bountyId)
+        .single();
+
+      if (bountyError) throw bountyError;
+
+      if (bounty?.properties) {
+        const property = bounty.properties;
+        setFullAddress(property.full_address);
+        setAddress(property.street_address);
+        setCity(property.city);
+        setState(property.state);
+        setZipCode(property.zip_code);
+        setAddressFromBounty(true);
+        
+        // Check for existing disclosure immediately
+        await checkForExistingDisclosureWithAddress(property.full_address);
+      }
+    } catch (error) {
+      console.error('Error fetching bounty details:', error);
+    }
+  };
+
+  const checkForExistingDisclosureWithAddress = async (addressToCheck: string) => {
+    if (!addressToCheck) return;
     
     setCheckingExisting(true);
     try {
       const { data: properties, error: propError } = await supabase
         .from('properties')
         .select('id')
-        .ilike('full_address', `%${fullAddress}%`);
+        .ilike('full_address', `%${addressToCheck}%`);
 
       if (propError) throw propError;
 
@@ -69,6 +113,10 @@ export const UploadDisclosureModal = ({
     } finally {
       setCheckingExisting(false);
     }
+  };
+
+  const checkForExistingDisclosure = async () => {
+    await checkForExistingDisclosureWithAddress(fullAddress);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -208,19 +256,46 @@ export const UploadDisclosureModal = ({
           <div className="space-y-4">
             <div>
               <Label htmlFor="address">Property Address *</Label>
-              <AddressAutocomplete
-                value={fullAddress}
-                onChange={setFullAddress}
-                onAddressSelect={(addressDetails) => {
-                  setFullAddress(addressDetails.full_address);
-                  setAddress(addressDetails.street_address);
-                  setCity(addressDetails.city);
-                  setState(addressDetails.state);
-                  setZipCode(addressDetails.zip_code);
-                }}
-                placeholder="Start typing a US address..."
-                className="mt-1"
-              />
+              {addressFromBounty ? (
+                <div className="mt-1 p-3 bg-muted rounded-md border">
+                  <div className="flex items-center gap-2 text-sm">
+                    <MapPin className="w-4 h-4 text-primary" />
+                    <span className="font-medium">Auto-filled from bounty request:</span>
+                  </div>
+                  <div className="mt-1 font-medium">{fullAddress}</div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="mt-2 h-7 px-2 text-xs"
+                    onClick={() => {
+                      setAddressFromBounty(false);
+                      setFullAddress('');
+                      setAddress('');
+                      setCity('');
+                      setState('');
+                      setZipCode('');
+                      setExistingDisclosure(null);
+                    }}
+                  >
+                    Change Address
+                  </Button>
+                </div>
+              ) : (
+                <AddressAutocomplete
+                  value={fullAddress}
+                  onChange={setFullAddress}
+                  onAddressSelect={(addressDetails) => {
+                    setFullAddress(addressDetails.full_address);
+                    setAddress(addressDetails.street_address);
+                    setCity(addressDetails.city);
+                    setState(addressDetails.state);
+                    setZipCode(addressDetails.zip_code);
+                  }}
+                  placeholder="Start typing a US address..."
+                  className="mt-1"
+                />
+              )}
             </div>
           </div>
 
