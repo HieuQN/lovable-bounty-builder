@@ -11,22 +11,19 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { useNotifications } from '@/hooks/useNotifications';
 import { formatDistanceToNow } from 'date-fns';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { useNavigate } from 'react-router-dom';
 
 const NotificationDropdown = () => {
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
   const navigate = useNavigate();
-  const location = useLocation();
-  const { user } = useAuth();
 
   const handleNotificationClick = async (notification: any) => {
     if (!notification.is_read) {
       await markAsRead(notification.id);
     }
     
-    // Navigate using the notification URL directly
+    // Simply navigate to the URL from the notification
+    // The URL already contains the correct path and showing ID parameter
     if (notification.url) {
       navigate(notification.url);
     }
