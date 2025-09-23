@@ -11,20 +11,90 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { useNotifications } from '@/hooks/useNotifications';
 import { formatDistanceToNow } from 'date-fns';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 const NotificationDropdown = () => {
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { user } = useAuth();
 
   const handleNotificationClick = async (notification: any) => {
     if (!notification.is_read) {
       await markAsRead(notification.id);
     }
     
-    if (notification.url) {
-      navigate(notification.url);
+    // Parse the notification URL and extract showing request ID if it's a message notification
+    if (notification.type === 'message' && notification.url) {
+      try {
+        // Extract showing request ID from notification message or fetch it
+        const showingRequestId = await getShowingRequestFromNotification(notification);
+        
+        // Check if user is an agent
+        const { data: agentProfile } = await supabase
+          .from('agent_profiles')
+          .select('id')
+          .eq('user_id', user?.id)
+          .single();
+
+        const isAgent = !!agentProfile;
+        
+        if (isAgent) {
+          // Navigate to agent dashboard with message tab and showing ID
+          navigate('/agent-dashboard-new', { 
+            state: { 
+              activeTab: 'messages', 
+              selectedShowingId: showingRequestId 
+            } 
+          });
+        } else {
+          // Navigate to buyer dashboard with message tab and showing ID
+          navigate('/buyer-dashboard', { 
+            state: { 
+              activeTab: 'messages', 
+              selectedShowingId: showingRequestId 
+            } 
+          });
+        }
+      } catch (error) {
+        console.error('Error handling notification click:', error);
+        // Fallback to simple URL navigation
+        if (notification.url) {
+          navigate(notification.url);
+        }
+      }
+    } else {
+      // For non-message notifications, use the simple URL
+      if (notification.url) {
+        navigate(notification.url);
+      }
     }
+  };
+
+  const getShowingRequestFromNotification = async (notification: any) => {
+    // Try to extract property address from notification message
+    const addressMatch = notification.message.match(/about (.+?)$/);
+    if (addressMatch) {
+      const address = addressMatch[1];
+      
+      // Find the showing request by property address
+      const { data: showingRequest } = await supabase
+        .from('showing_requests')
+        .select(`
+          id,
+          properties!inner(full_address, street_address)
+        `)
+        .or(`properties.full_address.ilike.%${address}%,properties.street_address.ilike.%${address}%`)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      return showingRequest?.id;
+    }
+    
+    return null;
   };
 
   const getNotificationIcon = (type: string) => {

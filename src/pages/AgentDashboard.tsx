@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import DashboardSidebar from '@/components/DashboardSidebar';
 import AgentDashboard from '@/components/AgentDashboard';
 import ChatInbox from '@/components/ChatInbox';
@@ -8,7 +9,22 @@ import AgentCompletedShowings from '@/components/AgentCompletedShowings';
 import AgentSettings from '@/components/AgentSettings';
 
 const AgentDashboardNew = () => {
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState('bounties');
+  const [selectedShowingId, setSelectedShowingId] = useState<string | null>(null);
+
+  // Handle navigation state from notifications
+  useEffect(() => {
+    if (location.state) {
+      const { activeTab: navActiveTab, selectedShowingId: navShowingId } = location.state as any;
+      if (navActiveTab) {
+        setActiveTab(navActiveTab);
+      }
+      if (navShowingId) {
+        setSelectedShowingId(navShowingId);
+      }
+    }
+  }, [location.state]);
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -22,7 +38,7 @@ const AgentDashboardNew = () => {
       case 'completed-showings':
         return <AgentCompletedShowings />;
       case 'messages':
-        return <ChatInbox userType="agent" />;
+        return <ChatInbox userType="agent" selectedShowingId={selectedShowingId} />;
       case 'settings':
         return <AgentSettings />;
       default:

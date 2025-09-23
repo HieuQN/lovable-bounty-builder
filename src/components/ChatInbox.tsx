@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -35,11 +35,22 @@ interface LocalShowingRequest {
 
 interface ChatInboxProps {
   userType: 'buyer' | 'agent';
+  selectedShowingId?: string | null;
 }
 
-const ChatInbox = ({ userType }: ChatInboxProps) => {
+const ChatInbox = ({ userType, selectedShowingId }: ChatInboxProps) => {
   const [selectedChat, setSelectedChat] = useState<LocalShowingRequest | null>(null);
   const [showingRequests, setShowingRequests] = useState<LocalShowingRequest[]>([]);
+
+  // Auto-select chat when selectedShowingId is provided
+  useEffect(() => {
+    if (selectedShowingId && showingRequests.length > 0) {
+      const requestToSelect = showingRequests.find(req => req.id === selectedShowingId);
+      if (requestToSelect) {
+        setSelectedChat(requestToSelect);
+      }
+    }
+  }, [selectedShowingId, showingRequests]);
 
   const handleChatSelect = (showing: LocalShowingRequest) => {
     setSelectedChat(showing);
@@ -49,6 +60,10 @@ const ChatInbox = ({ userType }: ChatInboxProps) => {
     setSelectedChat(null);
     // Refresh the chat list when closing
     window.location.reload();
+  };
+
+  const updateShowingRequests = (requests: LocalShowingRequest[]) => {
+    setShowingRequests(requests);
   };
 
   return (
@@ -62,7 +77,11 @@ const ChatInbox = ({ userType }: ChatInboxProps) => {
           </h2>
         </div>
         <div className="overflow-y-auto h-full">
-          <ChatList userType={userType} onChatSelect={handleChatSelect} />
+          <ChatList 
+            userType={userType} 
+            onChatSelect={handleChatSelect}
+            onShowingRequestsUpdate={updateShowingRequests}
+          />
         </div>
       </div>
 

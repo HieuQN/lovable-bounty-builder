@@ -37,9 +37,10 @@ interface LocalShowingRequest {
 interface ChatListProps {
   userType: 'buyer' | 'agent';
   onChatSelect?: (showing: LocalShowingRequest) => void;
+  onShowingRequestsUpdate?: (requests: LocalShowingRequest[]) => void;
 }
 
-const ChatList = ({ userType, onChatSelect }: ChatListProps) => {
+const ChatList = ({ userType, onChatSelect, onShowingRequestsUpdate }: ChatListProps) => {
   const { user } = useAuth();
   const [showingRequests, setShowingRequests] = useState<LocalShowingRequest[]>([]);
   const [selectedShowing, setSelectedShowing] = useState<LocalShowingRequest | null>(null);
@@ -134,6 +135,10 @@ const ChatList = ({ userType, onChatSelect }: ChatListProps) => {
       );
 
       setShowingRequests(showingsWithMessages as LocalShowingRequest[]);
+      // Notify parent component about updated showing requests
+      if (onShowingRequestsUpdate) {
+        onShowingRequestsUpdate(showingsWithMessages as LocalShowingRequest[]);
+      }
     } catch (error) {
       console.error('Error fetching showing requests:', error);
     } finally {
