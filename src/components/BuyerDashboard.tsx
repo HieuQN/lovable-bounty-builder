@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { PropertyCard } from '@/components/PropertyCard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -67,12 +68,24 @@ const BuyerDashboard = ({ activeTab: propActiveTab }: BuyerDashboardProps) => {
   const [chatShowingRequest, setChatShowingRequest] = useState<any>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(propActiveTab || 'purchased');
+  const [selectedShowingId, setSelectedShowingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
       fetchReports();
     }
   }, [user]);
+
+  // Switch to Messages tab when URL contains showing parameter
+  const location = useLocation();
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const showingParam = searchParams.get('showing');
+    if (showingParam) {
+      setActiveTab('messages');
+      setSelectedShowingId(showingParam);
+    }
+  }, [location.search]);
 
   const fetchReports = async () => {
     try {
@@ -413,7 +426,7 @@ const BuyerDashboard = ({ activeTab: propActiveTab }: BuyerDashboardProps) => {
         );
 
       case 'messages':
-        return <ChatInbox userType="buyer" />;
+        return <ChatInbox userType="buyer" selectedShowingId={selectedShowingId} />;
 
       case 'compare':
         return (

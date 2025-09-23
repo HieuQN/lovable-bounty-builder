@@ -12,20 +12,94 @@ import { Badge } from '@/components/ui/badge';
 import { useNotifications } from '@/hooks/useNotifications';
 import { formatDistanceToNow } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 const NotificationDropdown = () => {
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const handleNotificationClick = async (notification: any) => {
     if (!notification.is_read) {
       await markAsRead(notification.id);
     }
-    
-    // Simply navigate to the URL from the notification
-    // The URL already contains the correct path and showing ID parameter
+
+    // If URL already contains a showing id, just navigate
+    if (notification.url && /[?&]showing=/.test(notification.url)) {
+      return navigate(notification.url);
+    }
+
+    // For message notifications without a showing id, try to resolve it by address
+    if (notification.type === 'message') {
+      const isAgent = await checkIsAgent();
+      const showingId = await resolveShowingIdFromNotification(notification, isAgent);
+
+      if (showingId) {
+        const target = isAgent
+          ? `/agent-dashboard-new?showing=${showingId}`
+          : `/buyer-dashboard?showing=${showingId}`;
+        return navigate(target);
+      }
+
+      // Fallback: open Messages tab
+      const fallbackPath = isAgent ? '/agent-dashboard-new' : '/buyer-dashboard';
+      return navigate(fallbackPath, { state: { activeTab: 'messages' } });
+    }
+
+    // Default behavior
     if (notification.url) {
       navigate(notification.url);
+    }
+  };
+
+  const checkIsAgent = async (): Promise<boolean> => {
+    if (!user) return false;
+    const { data: agentProfile } = await supabase
+      .from('agent_profiles')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    return !!agentProfile;
+  };
+
+  const resolveShowingIdFromNotification = async (notification: any, isAgent: boolean) => {
+    try {
+      const match = notification.message?.match(/about (.+)$/);
+      const address = match?.[1]?.trim();
+      if (!address) return null;
+
+      if (isAgent) {
+        const { data: agentProfile } = await supabase
+          .from('agent_profiles')
+          .select('id')
+          .eq('user_id', user?.id)
+          .maybeSingle();
+        if (!agentProfile) return null;
+
+        const { data } = await supabase
+          .from('showing_requests')
+          .select(`id, properties!inner(full_address, street_address)`)
+          .eq('winning_agent_id', agentProfile.id)
+          .or(`properties.full_address.ilike.%${address}%,properties.street_address.ilike.%${address}%`)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        return data?.id || null;
+      } else {
+        const { data } = await supabase
+          .from('showing_requests')
+          .select(`id, properties!inner(full_address, street_address)`)
+          .eq('requested_by_user_id', user?.id as string)
+          .or(`properties.full_address.ilike.%${address}%,properties.street_address.ilike.%${address}%`)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        return data?.id || null;
+      }
+    } catch (e) {
+      console.error('Failed to resolve showing id from notification:', e);
+      return null;
     }
   };
 
