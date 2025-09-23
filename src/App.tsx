@@ -35,7 +35,8 @@ const App = () => (
             <Route path="/buyer-dashboard" element={<BuyerDashboardNew />} />
             <Route path="/agent-dashboard-new" element={<AgentDashboardNew />} />
             <Route path="/report/:reportId" element={<ReportView />} />
-            <Route path="/agent-dashboard" element={<AgentLogin />} />
+            <Route path="/agent-dashboard" element={<AgentDashboardNew />} />
+            <Route path="/agent-login" element={<AgentLogin />} />
             <Route path="/upload/:bountyId" element={<UploadDisclosure />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
