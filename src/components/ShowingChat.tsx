@@ -53,7 +53,17 @@ export const ShowingChat = ({ showingRequest, onClose }: ShowingChatProps) => {
   useEffect(() => {
     checkUserType();
     fetchMessages();
-    setupRealtimeSubscription();
+    const unsubscribe = setupRealtimeSubscription();
+    
+    // Set up interval to refresh messages every 3 seconds for better real-time feel
+    const interval = setInterval(() => {
+      fetchMessages();
+    }, 3000);
+    
+    return () => {
+      if (unsubscribe) unsubscribe();
+      clearInterval(interval);
+    };
   }, [showingRequest.id]);
 
   useEffect(() => {

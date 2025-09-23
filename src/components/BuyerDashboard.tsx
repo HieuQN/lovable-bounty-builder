@@ -15,6 +15,10 @@ import DashboardSidebar from '@/components/DashboardSidebar';
 import ChatInbox from '@/components/ChatInbox';
 import BuyerSearchBar from '@/components/BuyerSearchBar';
 
+interface BuyerDashboardProps {
+  activeTab?: string;
+}
+
 interface PurchasedReport {
   id: string;
   property_id: string;
@@ -49,7 +53,7 @@ interface AvailableReport {
   is_purchased?: boolean;
 }
 
-const BuyerDashboard = () => {
+const BuyerDashboard = ({ activeTab: propActiveTab }: BuyerDashboardProps) => {
   const { user } = useAuth();
   const [purchasedReports, setPurchasedReports] = useState<PurchasedReport[]>([]);
   const [availableReports, setAvailableReports] = useState<AvailableReport[]>([]);
@@ -63,7 +67,7 @@ const BuyerDashboard = () => {
   const [isShowingModalOpen, setIsShowingModalOpen] = useState(false);
   const [chatShowingRequest, setChatShowingRequest] = useState<any>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('purchased');
+  const [activeTab, setActiveTab] = useState(propActiveTab || 'purchased');
 
   useEffect(() => {
     if (user) {

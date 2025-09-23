@@ -18,7 +18,8 @@ import {
   Menu,
   X,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Settings
 } from 'lucide-react';
 
 interface DashboardSidebarProps {
@@ -39,12 +40,17 @@ const DashboardSidebar = ({ userType, activeTab, onTabChange }: DashboardSidebar
     { id: 'compare', label: 'Compare Properties', icon: FileText },
     { id: 'upcoming', label: 'Upcoming Showings', icon: Calendar },
     { id: 'completed', label: 'Completed Showings', icon: CheckCircle },
+    { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
   const agentTabs = [
     { id: 'bounties', label: 'Available Bounties', icon: Coins },
     { id: 'disclosures', label: 'My Disclosures', icon: Upload },
+    { id: 'showing-requests', label: 'Showing Requests', icon: Calendar },
+    { id: 'upcoming-showings', label: 'Upcoming Showings', icon: Calendar },
+    { id: 'completed-showings', label: 'Completed Showings', icon: CheckCircle },
     { id: 'messages', label: 'Messages', icon: MessageCircle },
+    { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
   const tabs = userType === 'buyer' ? buyerTabs : agentTabs;
