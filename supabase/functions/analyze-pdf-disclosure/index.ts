@@ -61,6 +61,14 @@ serve(async (req) => {
           .from('disclosure_reports')
           .update({ status: 'error' })
           .eq('id', reportId);
+        // Persist error log
+        await supabase.from('analysis_logs').insert({
+          report_id: reportId,
+          function_name: 'analyze-pdf-disclosure',
+          level: 'error',
+          message: 'Function failed',
+          context: { error: error instanceof Error ? error.message : String(error) }
+        });
       } catch (updateError) {
         console.error('Failed to update report status to error:', updateError);
       }
@@ -90,6 +98,15 @@ async function processPdfAnalysis(pdfText: string, reportId: string) {
       .eq('id', reportId);
 
     console.log('Updated report status to processing');
+
+    // Persist log: analysis started
+    await supabase.from('analysis_logs').insert({
+      report_id: reportId,
+      function_name: 'analyze-pdf-disclosure',
+      level: 'info',
+      message: 'Analysis started',
+      context: { pdfTextLength: pdfText.length }
+    });
 
     // Call Gemini API for analysis
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
@@ -218,6 +235,15 @@ Return the result in the specified JSON format.`;
             if (updateError) {
               throw updateError;
             }
+
+            // Persist success log
+            await supabase.from('analysis_logs').insert({
+              report_id: reportId,
+              function_name: 'analyze-pdf-disclosure',
+              level: 'info',
+              message: 'Report updated with Gemini analysis',
+              context: { overallRiskScore, riskCounts }
+            });
 
             console.log('Successfully updated report with analysis results');
 

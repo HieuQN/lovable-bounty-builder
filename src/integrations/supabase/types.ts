@@ -53,6 +53,39 @@ export type Database = {
         }
         Relationships: []
       }
+      analysis_logs: {
+        Row: {
+          context: Json | null
+          created_at: string
+          function_name: string
+          id: string
+          job_id: string | null
+          level: string
+          message: string
+          report_id: string | null
+        }
+        Insert: {
+          context?: Json | null
+          created_at?: string
+          function_name: string
+          id?: string
+          job_id?: string | null
+          level: string
+          message: string
+          report_id?: string | null
+        }
+        Update: {
+          context?: Json | null
+          created_at?: string
+          function_name?: string
+          id?: string
+          job_id?: string | null
+          level?: string
+          message?: string
+          report_id?: string | null
+        }
+        Relationships: []
+      }
       bids: {
         Row: {
           bid_amount: number

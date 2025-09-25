@@ -103,6 +103,15 @@ serve(async (req) => {
 
     console.log(`Processing file: ${job.file_path}`);
 
+    // Log job fetched
+    await supabaseClient.from('analysis_logs').insert({
+      job_id: jobId,
+      function_name: 'process-background-upload',
+      level: 'info',
+      message: 'Job fetched',
+      context: { file_path: job.file_path, agent_id: job.agent_id, bounty_id: job.bounty_id }
+    });
+
     // Download the file from storage
     const { data: fileData, error: downloadError } = await supabaseClient
       .storage
@@ -111,6 +120,13 @@ serve(async (req) => {
 
     if (downloadError || !fileData) {
       console.error('Error downloading file:', downloadError);
+      await supabaseClient.from('analysis_logs').insert({
+        job_id: jobId,
+        function_name: 'process-background-upload',
+        level: 'error',
+        message: 'Failed to download file from storage',
+        context: { error: downloadError?.message, file_path: job.file_path }
+      });
       await supabaseClient.rpc('update_upload_job_status', {
         job_id: jobId,
         new_status: 'failed',
@@ -129,6 +145,15 @@ serve(async (req) => {
     // Extract text from PDF
     const pdfText = await extractTextFromPDF(arrayBuffer);
     console.log(`Extracted ${pdfText.length} characters from PDF`);
+    
+    // Log extraction result
+    await supabaseClient.from('analysis_logs').insert({
+      job_id: jobId,
+      function_name: 'process-background-upload',
+      level: 'info',
+      message: 'PDF text extracted',
+      context: { file_name: job.file_name, length: pdfText.length }
+    });
 
     // Get the property_id from the bounty
     const { data: bounty, error: bountyError } = await supabaseClient
@@ -176,6 +201,16 @@ serve(async (req) => {
       });
     }
 
+    // Log report created
+    await supabaseClient.from('analysis_logs').insert({
+      job_id: jobId,
+      report_id: report.id,
+      function_name: 'process-background-upload',
+      level: 'info',
+      message: 'Report created',
+      context: { report_id: report.id, property_id: bounty.property_id }
+    });
+
     console.log(`Calling AI analysis for report: ${report.id}`);
     
     // Call the AI analysis function with extracted text
@@ -191,6 +226,16 @@ serve(async (req) => {
 
     if (analysisError) {
       console.error('Error in AI analysis:', analysisError);
+      
+      // Log AI analysis error
+      await supabaseClient.from('analysis_logs').insert({
+        job_id: jobId,
+        report_id: report.id,
+        function_name: 'process-background-upload',
+        level: 'error',
+        message: 'AI analysis failed',
+        context: { error: analysisError.message }
+      });
       
       // Update report with error
       await supabaseClient
@@ -213,6 +258,15 @@ serve(async (req) => {
     }
 
     console.log('AI analysis completed successfully');
+
+    // Log success
+    await supabaseClient.from('analysis_logs').insert({
+      job_id: jobId,
+      report_id: report.id,
+      function_name: 'process-background-upload',
+      level: 'info',
+      message: 'AI analysis completed successfully'
+    });
 
     // Update bounty status to completed
     await supabaseClient
