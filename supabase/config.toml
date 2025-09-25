@@ -52,3 +52,6 @@ verify_jwt = false
 
 [functions.send-disclosure-notification]
 verify_jwt = false
+
+[functions.gemini-direct-analysis]
+verify_jwt = false

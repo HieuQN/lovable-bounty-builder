@@ -121,6 +121,7 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
 
       // Direct Gemini API analysis (no 20MB limit)
       console.log(`Starting direct Gemini analysis for PDF (${(file.size / (1024 * 1024)).toFixed(2)}MB)`);
+      console.log('Calling gemini-direct-analysis function with reportId:', reportId);
       
       const { data: analysisResult, error: analysisError } = await supabase.functions.invoke(
         'gemini-direct-analysis',
@@ -132,6 +133,8 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
           }
         }
       );
+
+      console.log('Analysis function response:', { analysisResult, analysisError });
 
       setProcessingProgress(100);
 
