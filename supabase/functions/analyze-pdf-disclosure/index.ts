@@ -42,9 +42,9 @@ serve(async (req) => {
 
     // If we have adequate text, analyze from text
     if (pdfText && pdfText.length > 1000) {
-      if (pdfText.length > 800000) { // ~200k tokens
+      if (pdfText.length > 400000) { // ~100k tokens - reduced for memory safety
         console.log('PDF text too large, truncating...');
-        const truncatedText = pdfText.substring(0, 800000) + "\n\n[Note: Document was truncated due to size limitations]";
+        const truncatedText = pdfText.substring(0, 400000) + "\n\n[Note: Document was truncated due to size limitations]";
         return await processPdfAnalysis(truncatedText, reportId);
       }
       return await processPdfAnalysis(pdfText, reportId);
