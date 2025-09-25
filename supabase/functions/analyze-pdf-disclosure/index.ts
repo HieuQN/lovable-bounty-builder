@@ -71,11 +71,7 @@ serve(async (req) => {
 
     // If we have adequate text, analyze from text
     if (pdfText && pdfText.length > 1000) {
-      if (pdfText.length > 200000) { // ~50k tokens - reduced for memory efficiency
-        console.log('PDF text too large, truncating...');
-        const truncatedText = pdfText.substring(0, 200000) + "\n\n[Note: Document was truncated due to size limitations]";
-        return await processPdfAnalysis(truncatedText, reportId);
-      }
+      // No token limit - process full text
       return await processPdfAnalysis(pdfText, reportId);
     }
 
@@ -96,16 +92,13 @@ serve(async (req) => {
       const sizeMB = (blob.size || 0) / (1024 * 1024);
       console.log(`Storage PDF size: ${sizeMB.toFixed(2)} MB`);
 
-      // For large files, avoid base64 payloads and run text-only analysis
-      if (sizeMB > 8) {
-        const headSlice = blob.slice(0, 8 * 1024 * 1024); // read first 8MB only
+      // For files over 20MB, avoid base64 payloads and run text-only analysis  
+      if (sizeMB > 20) {
+        const headSlice = blob.slice(0, 20 * 1024 * 1024); // read first 20MB only
         const largeBuffer = await headSlice.arrayBuffer();
         const extractedText = await extractTextFromPDF(largeBuffer);
-        const textForAI = extractedText.length > 200000
-          ? extractedText.substring(0, 200000) + "\n\n[Note: Document was truncated due to size limitations]"
-          : extractedText;
         console.log('Using memory-safe text analysis path for large PDF (head slice)');
-        return await processPdfAnalysis(textForAI, reportId);
+        return await processPdfAnalysis(extractedText, reportId);
       }
 
       // Small files: allow base64 PDF analysis
