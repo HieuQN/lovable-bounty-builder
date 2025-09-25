@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.0';
+import { extractText } from 'https://esm.sh/unpdf@0.12.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -28,32 +29,27 @@ interface AnalysisResult {
   components: AnalysisComponent[];
 }
 
-// Memory-safe plain-text extractor for large PDFs (best-effort)
+// Proper PDF text extraction using unpdf
 async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
   try {
-    const bytes = new Uint8Array(pdfBuffer);
-    let text = '';
-    for (let i = 0; i < bytes.length; i++) {
-      const b = bytes[i];
-      // Keep printable ASCII and normalize whitespace
-      if (b === 9 || b === 10 || b === 13) {
-        text += ' ';
-      } else if (b >= 32 && b <= 126) {
-        text += String.fromCharCode(b);
-      } else {
-        text += ' ';
-      }
-      // Hard stop to control memory during extraction
-      if (text.length > 600000) break;
+    console.log(`Extracting text from PDF buffer of size: ${pdfBuffer.byteLength} bytes`);
+    const uint8Array = new Uint8Array(pdfBuffer);
+    const result = await extractText(uint8Array);
+    
+    // Handle both string and array responses
+    const text = Array.isArray(result.text) ? result.text.join('\n') : result.text;
+    
+    console.log(`Successfully extracted ${text.length} characters from PDF`);
+    
+    if (text.length < 100) {
+      throw new Error('Extracted text too short - may not be a valid PDF or text-based PDF');
     }
-    text = text.replace(/\s+/g, ' ').trim();
-    if (text.length < 500) {
-      return '[Limited text extracted from PDF. Proceeding with best-effort analysis.]';
-    }
+    
     return text;
   } catch (err) {
-    console.error('extractTextFromPDF failed:', err);
-    return '[Failed to extract text from PDF. Proceeding with limited context.]';
+    console.error('PDF text extraction failed:', err);
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to extract text from PDF: ${errorMessage}`);
   }
 }
 
@@ -98,22 +94,33 @@ serve(async (req) => {
       const sizeMB = (blob.size || 0) / (1024 * 1024);
       console.log(`Storage PDF size: ${sizeMB.toFixed(2)} MB`);
 
-      // For files over 20MB, avoid base64 payloads and run text-only analysis  
+      // For files over 20MB, extract text from first 20MB only
       if (sizeMB > 20) {
-        const headSlice = blob.slice(0, 20 * 1024 * 1024); // read first 20MB only
+        console.log('Large PDF detected, extracting text from first 20MB...');
+        const headSlice = blob.slice(0, 20 * 1024 * 1024);
         const largeBuffer = await headSlice.arrayBuffer();
         const extractedText = await extractTextFromPDF(largeBuffer);
-        console.log('Using memory-safe text analysis path for large PDF (head slice)');
+        console.log('Using text analysis path for large PDF');
         return await processPdfAnalysis(extractedText, request.reportId);
       }
 
-      // Small files: allow base64 PDF analysis
-      const arrayBuffer = await blob.arrayBuffer();
-      const uint8 = new Uint8Array(arrayBuffer);
-      let binary = '';
-      for (let i = 0; i < uint8.length; i++) binary += String.fromCharCode(uint8[i]);
-      const base64 = btoa(binary);
-      return await processPdfAnalysisFromPDF(base64, request.reportId);
+      // Small files: try text extraction first, fall back to base64 if needed
+      try {
+        const arrayBuffer = await blob.arrayBuffer();
+        const extractedText = await extractTextFromPDF(arrayBuffer);
+        console.log('Using text analysis path for small PDF');
+        return await processPdfAnalysis(extractedText, request.reportId);
+      } catch (textError) {
+        const errorMessage = textError instanceof Error ? textError.message : String(textError);
+        console.log('Text extraction failed, trying base64 approach:', errorMessage);
+        // Fall back to base64 PDF analysis
+        const arrayBuffer = await blob.arrayBuffer();
+        const uint8 = new Uint8Array(arrayBuffer);
+        let binary = '';
+        for (let i = 0; i < uint8.length; i++) binary += String.fromCharCode(uint8[i]);
+        const base64 = btoa(binary);
+        return await processPdfAnalysisFromPDF(base64, request.reportId);
+      }
     }
 
     return new Response(
