@@ -136,9 +136,9 @@ serve(async (req) => {
       context: { length: pdfText.length }
     });
 
-    // Call Gemini analysis function
+    // Call Gemini analysis function (send storage reference to allow inline PDF parsing)
     const { data: aiRes, error: aiErr } = await supabase.functions.invoke('analyze-pdf-disclosure', {
-      body: { pdfText, reportId: report.id }
+      body: { reportId: report.id, bucket, filePath: file_path }
     });
 
     if (aiErr) {

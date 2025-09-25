@@ -8,8 +8,10 @@ const corsHeaders = {
 };
 
 interface AnalysisRequest {
-  pdfText: string;
+  pdfText?: string;
   reportId: string;
+  bucket?: string;
+  filePath?: string;
 }
 
 interface AnalysisComponent {
@@ -33,19 +35,44 @@ serve(async (req) => {
 
   let reportId: string | undefined;
   try {
-    const { pdfText, reportId: requestReportId }: AnalysisRequest = await req.json();
+    const { pdfText, reportId: requestReportId, bucket, filePath }: AnalysisRequest = await req.json();
     reportId = requestReportId;
     console.log(`Starting PDF analysis for report: ${reportId}`);
     console.log(`PDF text length: ${pdfText?.length || 0} characters`);
-    
-    // Check if PDF text is too large (approximate token limit)
-    if (pdfText.length > 800000) { // ~200k tokens
-      console.log('PDF text too large, truncating...');
-      const truncatedText = pdfText.substring(0, 800000) + "\n\n[Note: Document was truncated due to size limitations]";
-      return await processPdfAnalysis(truncatedText, reportId);
+
+    // If we have adequate text, analyze from text
+    if (pdfText && pdfText.length > 1000) {
+      if (pdfText.length > 800000) { // ~200k tokens
+        console.log('PDF text too large, truncating...');
+        const truncatedText = pdfText.substring(0, 800000) + "\n\n[Note: Document was truncated due to size limitations]";
+        return await processPdfAnalysis(truncatedText, reportId);
+      }
+      return await processPdfAnalysis(pdfText, reportId);
     }
 
-    return await processPdfAnalysis(pdfText, reportId);
+    // Otherwise, try analyzing directly from the PDF file in storage
+    if (bucket && filePath) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+      const { data: fileData, error: downloadErr } = await supabase.storage
+        .from(bucket)
+        .download(filePath);
+
+      if (downloadErr || !fileData) {
+        throw new Error(`Failed to download PDF from storage: ${downloadErr?.message}`);
+      }
+      const arrayBuffer = await fileData.arrayBuffer();
+      const uint8 = new Uint8Array(arrayBuffer);
+      // Base64 encode
+      let binary = '';
+      for (let i = 0; i < uint8.length; i++) binary += String.fromCharCode(uint8[i]);
+      const base64 = btoa(binary);
+      return await processPdfAnalysisFromPDF(base64, reportId);
+    }
+
+    throw new Error('No valid input provided: pdfText or bucket+filePath required');
     
   } catch (error) {
     console.error('Error in analyze-pdf-disclosure function:', error);
@@ -80,6 +107,155 @@ serve(async (req) => {
     });
   }
 });
+
+async function processPdfAnalysisFromPDF(pdfBase64: string, reportId: string) {
+  if (!pdfBase64 || !reportId) {
+    throw new Error('Missing required fields: pdfBase64 and reportId');
+  }
+
+  // Initialize Supabase client
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+  // Update report status to processing
+  await supabase
+    .from('disclosure_reports')
+    .update({ status: 'processing' })
+    .eq('id', reportId);
+
+  console.log('Updated report status to processing (PDF inline)');
+
+  // Call Gemini API for analysis with inline PDF
+  const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+  console.log(`Gemini API Key configured: ${!!geminiApiKey}`);
+  if (!geminiApiKey) {
+    throw new Error('GEMINI_API_KEY not configured');
+  }
+
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
+
+  const systemPrompt = `You are an expert real estate analyst. Analyze the provided real estate disclosure PDF and return the same JSON schema as before.`;
+
+  const payload = {
+    systemInstruction: {
+      parts: [{ text: systemPrompt }]
+    },
+    contents: [{
+      parts: [
+        { inline_data: { mime_type: 'application/pdf', data: pdfBase64 } }
+      ]
+    }],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'OBJECT',
+        properties: {
+          summary: { type: 'STRING' },
+          components: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                componentName: { type: 'STRING' },
+                analysis: { type: 'STRING' },
+                riskScore: { type: 'STRING', enum: ['Low','Medium','High','Unknown'] },
+                estimatedCost: { type: 'STRING' },
+                sourcePage: { type: 'NUMBER' }
+              },
+              required: ['componentName','analysis','riskScore','estimatedCost','sourcePage']
+            }
+          }
+        },
+        required: ['summary','components']
+      }
+    }
+  };
+
+  // Retry logic
+  let response;
+  let retries = 3;
+  let delay = 1000;
+
+  while (retries > 0) {
+    try {
+      console.log('Calling Gemini API with inline PDF...');
+      response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      console.log(`Gemini (inline) status: ${response.status}`);
+      if (response.ok) {
+        const result = await response.json();
+        const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!jsonText) throw new Error('Invalid Gemini response (inline)');
+        const analysisResult: AnalysisResult = JSON.parse(jsonText);
+
+        // Calculate overall risk score
+        const riskCounts = { Low: 0, Medium: 0, High: 0, Unknown: 0 } as const;
+        const counts: Record<keyof typeof riskCounts, number> = { Low:0, Medium:0, High:0, Unknown:0 };
+        analysisResult.components.forEach(c => { counts[c.riskScore as keyof typeof riskCounts]++; });
+
+        let overallRiskScore = 1;
+        if (counts.High > 0) overallRiskScore = Math.min(10, 5 + counts.High * 2);
+        else if (counts.Medium > 0) overallRiskScore = Math.min(7, 3 + counts.Medium);
+        else if (counts.Low > 0) overallRiskScore = Math.min(4, 1 + Math.floor(counts.Low * 0.5));
+
+        const findings = analysisResult.components.map(comp => ({
+          category: comp.componentName,
+          finding: comp.analysis,
+          risk_level: comp.riskScore.toLowerCase(),
+          estimated_cost: comp.estimatedCost,
+          negotiation_point: comp.riskScore === 'High' ? 'Major concern for negotiation' : comp.riskScore === 'Medium' ? 'Moderate negotiation point' : 'Minor issue',
+          source_page: comp.sourcePage
+        }));
+
+        const { error: updateError } = await supabase
+          .from('disclosure_reports')
+          .update({
+            status: 'complete',
+            risk_score: overallRiskScore,
+            report_summary_basic: analysisResult.summary,
+            report_summary_full: JSON.stringify({
+              summary: analysisResult.summary,
+              findings,
+              total_components: analysisResult.components.length,
+              risk_breakdown: counts
+            }),
+            dummy_analysis_complete: true
+          })
+          .eq('id', reportId);
+
+        if (updateError) throw updateError;
+
+        await supabase.from('analysis_logs').insert({
+          report_id: reportId,
+          function_name: 'analyze-pdf-disclosure',
+          level: 'info',
+          message: 'Report updated with Gemini (inline PDF) analysis'
+        });
+
+        return new Response(JSON.stringify({ success: true, reportId, riskScore: overallRiskScore, summary: analysisResult.summary }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (response.status === 429 || response.status >= 500) {
+        await new Promise(r => setTimeout(r, delay));
+        delay *= 2; retries--; continue;
+      }
+      throw new Error(`Gemini inline request failed: ${response.status}`);
+    } catch (e) {
+      if (retries === 1) throw e;
+      await new Promise(r => setTimeout(r, delay));
+      delay *= 2; retries--;
+    }
+  }
+
+  throw new Error('Failed to get response from Gemini (inline) after retries');
+}
 
 async function processPdfAnalysis(pdfText: string, reportId: string) {
   if (!pdfText || !reportId) {
