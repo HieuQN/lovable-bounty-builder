@@ -265,7 +265,30 @@ const BuyerDashboard = ({ activeTab: propActiveTab }: BuyerDashboardProps) => {
 
   const parseRiskCounts = (summary: string) => {
     try {
-      const parsed = JSON.parse(summary);
+      // Handle cases where summary might be plain text or JSON
+      if (!summary) {
+        return {
+          high: 0,
+          medium: 0,
+          low: 0,
+          examples: { high: 'None', medium: 'None', low: 'None' }
+        };
+      }
+
+      // Try to parse as JSON first
+      let parsed;
+      try {
+        parsed = JSON.parse(summary);
+      } catch {
+        // If it's not JSON, treat as plain text summary
+        return {
+          high: 0,
+          medium: 0, 
+          low: 1, // Assume basic analysis if plain text
+          examples: { high: 'None', medium: 'None', low: 'General Review' }
+        };
+      }
+
       if (parsed.findings) {
         const high = parsed.findings.filter((f: any) => f.risk_level === 'high').length;
         const medium = parsed.findings.filter((f: any) => f.risk_level === 'medium').length;
@@ -273,16 +296,29 @@ const BuyerDashboard = ({ activeTab: propActiveTab }: BuyerDashboardProps) => {
         
         const examples = {
           high: parsed.findings.find((f: any) => f.risk_level === 'high')?.category || 'None',
-          medium: parsed.findings.find((f: any) => f.risk_level === 'medium')?.category || 'None', 
-          low: parsed.findings.find((f: any) => f.risk_level === 'low')?.category || 'None'
+          medium: parsed.findings.find((f: any) => f.risk_level === 'medium')?.category || 'None',
+          low: parsed.findings.find((f: any) => f.risk_level === 'low')?.category || 'None',
         };
         
         return { high, medium, low, examples };
       }
-    } catch (e) {
-      console.error('Error parsing risk summary:', e);
+      
+      // Fallback for older format
+      return {
+        high: parsed.risk_breakdown?.High || 0,
+        medium: parsed.risk_breakdown?.Medium || 0,
+        low: parsed.risk_breakdown?.Low || 0,
+        examples: { high: 'Various', medium: 'Various', low: 'Various' }
+      };
+    } catch (error) {
+      console.error('Error parsing risk summary:', error);
+      return {
+        high: 0,
+        medium: 0,
+        low: 0,
+        examples: { high: 'None', medium: 'None', low: 'None' }
+      };
     }
-    return { high: 0, medium: 0, low: 0, examples: { high: 'None', medium: 'None', low: 'None' } };
   };
 
   const formatPropertyTitle = (address: string, city: string, state: string) => {

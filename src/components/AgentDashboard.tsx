@@ -48,6 +48,7 @@ interface AgentDashboardProps {
 const AgentDashboard = ({ activeTab = 'bounties' }: AgentDashboardProps) => {
   const [bounties, setBounties] = useState<Bounty[]>([]);
   const [myDisclosures, setMyDisclosures] = useState<MyDisclosure[]>([]);
+  const [myReports, setMyReports] = useState<any[]>([]);
   const [agentProfile, setAgentProfile] = useState<AgentProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedBounty, setSelectedBounty] = useState<string | null>(null);
@@ -376,6 +377,16 @@ const AgentDashboard = ({ activeTab = 'bounties' }: AgentDashboardProps) => {
                       <div className="text-sm text-muted-foreground">
                         Uploaded: {new Date(disclosure.created_at).toLocaleDateString()}
                       </div>
+                      {disclosure.status === 'complete' && (
+                        <Button 
+                          size="sm" 
+                          className="w-full mt-2"
+                          onClick={() => window.open(`/report/${disclosure.id}`, '_blank')}
+                        >
+                          <FileText className="w-4 h-4 mr-2" />
+                          View Report
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
