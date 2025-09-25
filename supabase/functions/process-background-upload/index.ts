@@ -2,6 +2,39 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// PDF parsing function
+async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
+  try {
+    // Simple text extraction - in production, use a proper PDF library
+    const uint8Array = new Uint8Array(pdfBuffer);
+    const decoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: false });
+    let text = decoder.decode(uint8Array);
+    
+    // Basic PDF text extraction (this is a fallback - in production use proper PDF parsing)
+    // Remove PDF binary content and extract readable text
+    const textMatch = text.match(/BT\s*(.*?)\s*ET/gs);
+    if (textMatch) {
+      text = textMatch.map(match => match.replace(/BT\s*|\s*ET/g, '')).join(' ');
+    }
+    
+    // Clean up the text
+    text = text
+      .replace(/[^\x20-\x7E\s]/g, ' ') // Remove non-printable characters
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .trim();
+    
+    if (text.length < 100) {
+      // If extraction failed, return a descriptive message
+      return `PDF document uploaded with ${uint8Array.length} bytes of content. Manual text extraction required for detailed analysis.`;
+    }
+    
+    return text;
+  } catch (error) {
+    console.error('PDF text extraction failed:', error);
+    return 'PDF text extraction failed. Manual review required.';
+  }
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -66,18 +99,66 @@ serve(async (req) => {
       });
     }
 
-    // Convert file to ArrayBuffer and then to base64
+    // Convert file to ArrayBuffer and extract text
     const arrayBuffer = await fileData.arrayBuffer();
-    const uint8Array = new Uint8Array(arrayBuffer);
-    const base64Data = btoa(String.fromCharCode(...uint8Array));
+    console.log(`Extracting text from PDF: ${job.file_name}`);
+    
+    // Extract text from PDF
+    const pdfText = await extractTextFromPDF(arrayBuffer);
+    console.log(`Extracted ${pdfText.length} characters from PDF`);
 
-    // Call the AI analysis function
+    // Get the property_id from the bounty
+    const { data: bounty, error: bountyError } = await supabaseClient
+      .from('disclosure_bounties')
+      .select('property_id')
+      .eq('id', job.bounty_id)
+      .single();
+
+    if (bountyError || !bounty) {
+      console.error('Error fetching bounty:', bountyError);
+      await supabaseClient.rpc('update_upload_job_status', {
+        job_id: jobId,
+        new_status: 'failed',
+        error_msg: 'Bounty not found'
+      });
+      return new Response(JSON.stringify({ error: 'Bounty not found' }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Create disclosure report first
+    const { data: report, error: reportError } = await supabaseClient
+      .from('disclosure_reports')
+      .insert({
+        property_id: bounty.property_id,
+        uploaded_by_agent_id: job.agent_id,
+        status: 'processing',
+        raw_pdf_url: `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/disclosure-uploads/${job.file_path}`
+      })
+      .select()
+      .single();
+
+    if (reportError || !report) {
+      console.error('Error creating report:', reportError);
+      await supabaseClient.rpc('update_upload_job_status', {
+        job_id: jobId,
+        new_status: 'failed',
+        error_msg: `Failed to create report: ${reportError?.message}`
+      });
+      return new Response(JSON.stringify({ error: 'Failed to create report' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Call the AI analysis function with extracted text
     const { data: analysisResult, error: analysisError } = await supabaseClient.functions.invoke(
       'analyze-pdf-disclosure',
       {
         body: { 
-          pdfBase64: base64Data,
-          fileName: job.file_name
+          pdfText: pdfText,
+          reportId: report.id
         }
       }
     );
@@ -95,31 +176,7 @@ serve(async (req) => {
       });
     }
 
-    // Create or update disclosure report
-    const { error: reportError } = await supabaseClient
-      .from('disclosure_reports')
-      .upsert({
-        property_id: job.bounty_id, // Using bounty_id as property_id for now
-        uploaded_by_agent_id: job.agent_id,
-        status: 'complete',
-        risk_score: analysisResult.riskScore || 0,
-        report_summary_basic: analysisResult.summary || 'Analysis completed',
-        report_summary_full: analysisResult,
-        raw_pdf_url: `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/disclosure-uploads/${job.file_path}`
-      });
-
-    if (reportError) {
-      console.error('Error creating report:', reportError);
-      await supabaseClient.rpc('update_upload_job_status', {
-        job_id: jobId,
-        new_status: 'failed',
-        error_msg: `Failed to create report: ${reportError.message}`
-      });
-      return new Response(JSON.stringify({ error: 'Failed to create report' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    console.log('AI analysis completed successfully');
 
     // Update bounty status to completed
     await supabaseClient
