@@ -15,43 +15,8 @@ type Body = {
   bounty_id?: string | null;
 };
 
-async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
-  try {
-    const uint8Array = new Uint8Array(pdfBuffer);
-    let text = '';
-    let i = 0;
-    while (i < uint8Array.length - 1) {
-      if (uint8Array[i] === 66 && uint8Array[i + 1] === 84) { // "BT"
-        i += 2;
-        let textContent = '';
-        while (i < uint8Array.length - 1) {
-          if (uint8Array[i] === 69 && uint8Array[i + 1] === 84) { // "ET"
-            break;
-          }
-          if (uint8Array[i] >= 32 && uint8Array[i] <= 126) {
-            textContent += String.fromCharCode(uint8Array[i]);
-          } else if (uint8Array[i] === 10 || uint8Array[i] === 13) {
-            textContent += ' ';
-          }
-          i++;
-        }
-        text += textContent + ' ';
-      }
-      i++;
-    }
-    text = text
-      .replace(/[^\w\s\.,;:!\?\-\$%()]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    if (text.length < 50) {
-      text = `Property disclosure document uploaded. Length: ${uint8Array.length} bytes.`;
-    }
-    return text;
-  } catch (e) {
-    console.error('PDF extraction error:', e);
-    return 'PDF uploaded; text extraction failed.';
-  }
-}
+// Note: Text extraction function removed as we now use direct Gemini API processing
+// which handles PDF content directly without needing to extract text first
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -112,9 +77,26 @@ serve(async (req) => {
           context: { bucket, file_path }
         });
 
-        // Invoke analyzer with storage reference (no download here)
-        const { error: aiErr } = await supabase.functions.invoke('analyze-pdf-disclosure', {
-          body: { reportId: report.id, bucket, filePath: file_path }
+        // Get the PDF file and convert to base64 for direct Gemini analysis
+        const { data: fileData, error: fileError } = await supabase.storage
+          .from(bucket)
+          .download(file_path);
+
+        if (fileError || !fileData) {
+          throw new Error(`Failed to download file: ${fileError?.message}`);
+        }
+
+        // Convert to base64
+        const arrayBuffer = await fileData.arrayBuffer();
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+
+        // Invoke new direct analysis function
+        const { error: aiErr } = await supabase.functions.invoke('gemini-direct-analysis', {
+          body: { 
+            reportId: report.id, 
+            pdfBase64: base64,
+            fileName: file_path.split('/').pop() || 'disclosure.pdf'
+          }
         });
 
         if (aiErr) {
