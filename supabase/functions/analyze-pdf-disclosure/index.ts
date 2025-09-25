@@ -237,6 +237,41 @@ async function processPdfAnalysisFromPDF(pdfBase64: string, reportId: string) {
           message: 'Report updated with Gemini (inline PDF) analysis'
         });
 
+        try {
+          // Notify agent that analysis is complete (modal upload flow)
+          const { data: reportRow } = await supabase
+            .from('disclosure_reports')
+            .select('property_id, uploaded_by_agent_id')
+            .eq('id', reportId)
+            .single();
+
+          if (reportRow?.uploaded_by_agent_id && reportRow?.property_id) {
+            const { data: property } = await supabase
+              .from('properties')
+              .select('street_address')
+              .eq('id', reportRow.property_id)
+              .single();
+
+            const { data: agent } = await supabase
+              .from('agent_profiles')
+              .select('user_id')
+              .eq('id', reportRow.uploaded_by_agent_id)
+              .single();
+
+            if (property && agent) {
+              await supabase.functions.invoke('send-disclosure-notification', {
+                body: {
+                  propertyAddress: property.street_address,
+                  reportId: reportId,
+                  userId: agent.user_id
+                }
+              });
+            }
+          }
+        } catch (e) {
+          console.error('Notification send failed:', e);
+        }
+
         return new Response(JSON.stringify({ success: true, reportId, riskScore: overallRiskScore, summary: analysisResult.summary }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
@@ -422,6 +457,41 @@ Return the result in the specified JSON format.`;
         });
 
         console.log('Successfully updated report with analysis results');
+
+            try {
+              // Notify agent that analysis is complete (modal upload flow)
+              const { data: reportRow } = await supabase
+                .from('disclosure_reports')
+                .select('property_id, uploaded_by_agent_id')
+                .eq('id', reportId)
+                .single();
+
+              if (reportRow?.uploaded_by_agent_id && reportRow?.property_id) {
+                const { data: property } = await supabase
+                  .from('properties')
+                  .select('street_address')
+                  .eq('id', reportRow.property_id)
+                  .single();
+
+                const { data: agent } = await supabase
+                  .from('agent_profiles')
+                  .select('user_id')
+                  .eq('id', reportRow.uploaded_by_agent_id)
+                  .single();
+
+                if (property && agent) {
+                  await supabase.functions.invoke('send-disclosure-notification', {
+                    body: {
+                      propertyAddress: property.street_address,
+                      reportId: reportId,
+                      userId: agent.user_id
+                    }
+                  });
+                }
+              }
+            } catch (e) {
+              console.error('Notification send failed:', e);
+            }
 
             return new Response(JSON.stringify({ 
               success: true, 

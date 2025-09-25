@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
@@ -36,6 +37,8 @@ export const UploadDisclosureModal = ({
   const [existingDisclosure, setExistingDisclosure] = useState<any>(null);
   const [checkingExisting, setCheckingExisting] = useState(false);
   const [addressFromBounty, setAddressFromBounty] = useState(false);
+  const [phase, setPhase] = useState<'idle' | 'uploading' | 'uploaded' | 'analyzing'>('idle');
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // Fetch bounty details and pre-populate address if bountyId is provided
   useEffect(() => {
@@ -130,7 +133,17 @@ export const UploadDisclosureModal = ({
         });
         return;
       }
+      if (selectedFile.size > 20 * 1024 * 1024) {
+        toast({
+          title: "File Too Large",
+          description: "Please upload a PDF under 20MB",
+          variant: "destructive",
+        });
+        return;
+      }
       setFile(selectedFile);
+      setPhase('idle');
+      setUploadProgress(0);
     }
   };
 
@@ -154,8 +167,16 @@ export const UploadDisclosureModal = ({
     }
 
     setLoading(true);
+    setPhase('uploading');
+    setUploadProgress(5);
 
+    // Simulate determinate upload progress while awaiting SDK upload
+    let progressTimer: number | undefined = undefined as any;
     try {
+      progressTimer = window.setInterval(() => {
+        setUploadProgress((p) => (p < 90 ? p + 3 : p));
+      }, 200);
+
       // Get agent profile
       const { data: agentProfile, error: agentError } = await supabase
         .from('agent_profiles')
@@ -200,39 +221,48 @@ export const UploadDisclosureModal = ({
 
       if (uploadError) throw uploadError;
 
-      // Get file URL
-      const { data: urlData } = supabase.storage
-        .from('disclosures')
-        .getPublicUrl(fileName);
+      // Upload complete UI
+      if (progressTimer) window.clearInterval(progressTimer);
+      setUploadProgress(100);
+      setPhase('uploaded');
 
-      // Start AI analysis via edge function (no direct DB insert here)
-      const { error: funcError } = await supabase.functions.invoke('extract-analyze-disclosure', {
-        body: {
-          property_id: propertyId,
-          agent_profile_id: agentProfile.id,
-          bucket: 'disclosures',
-          file_path: fileName,
-          bounty_id: bountyId || null,
-        },
-      });
-
-      if (funcError) throw funcError;
+      // Fire-and-forget: start AI analysis in background, do not block UI or mark failure
+      (async () => {
+        try {
+          await supabase.functions.invoke('extract-analyze-disclosure', {
+            body: {
+              property_id: propertyId,
+              agent_profile_id: agentProfile.id,
+              bucket: 'disclosures',
+              file_path: fileName,
+              bounty_id: bountyId || null,
+            },
+          });
+        } catch (err) {
+          console.error('Background analysis invocation error:', err);
+        }
+      })();
 
       toast({
-        title: "Disclosure Upload Received",
-        description: "AI analysis started. You’ll see the report when complete.",
+        title: "Uploaded — Analyzing in Background",
+        description: "You can close this window now. We'll notify you when the report is ready.",
       });
 
+      // Notify parent to refresh data
       onSuccess();
-      onClose();
+
     } catch (error: any) {
       console.error('Error uploading disclosure:', error);
+      if (progressTimer) window.clearInterval(progressTimer);
+      setPhase('idle');
+      setUploadProgress(0);
       toast({
         title: "Upload Failed",
         description: error.message || "Failed to upload disclosure",
         variant: "destructive",
       });
     } finally {
+      if (progressTimer) window.clearInterval(progressTimer);
       setLoading(false);
     }
   };
@@ -367,17 +397,26 @@ export const UploadDisclosureModal = ({
             />
           </div>
 
+          {phase !== 'idle' && (
+            <div className="space-y-2">
+              <Progress value={uploadProgress} />
+              <p className="text-sm text-muted-foreground">
+                {phase === 'uploading' ? 'Uploading to secure storage...' : 'Uploaded — analysis will continue in the background. You can close this window.'}
+              </p>
+            </div>
+          )}
+
           {/* Submit Button */}
           <div className="flex gap-3 pt-4">
-            <Button variant="outline" onClick={onClose} disabled={loading}>
-              Cancel
+            <Button variant="outline" onClick={onClose}>
+              {phase !== 'idle' ? 'Close' : 'Cancel'}
             </Button>
             <Button 
               onClick={handleSubmit} 
-              disabled={loading || !!existingDisclosure}
+              disabled={loading || !!existingDisclosure || phase !== 'idle'}
               className="flex-1"
             >
-              {loading ? "Uploading..." : "Upload Disclosure"}
+              {phase === 'uploading' ? 'Uploading...' : 'Upload Disclosure'}
             </Button>
           </div>
         </div>
