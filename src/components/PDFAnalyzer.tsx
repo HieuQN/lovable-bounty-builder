@@ -8,10 +8,6 @@ import { Progress } from './ui/progress';
 import { Loader2, Upload, FileText, CheckCircle, Clock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from './ui/use-toast';
-import * as pdfjsLib from 'pdfjs-dist';
-
-// Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
 
 interface PDFAnalyzerProps {
   reportId: string;
@@ -27,8 +23,7 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadJobId, setUploadJobId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isExtractingText, setIsExtractingText] = useState(false);
-  const [extractProgress, setExtractProgress] = useState(0);
+  const [processingProgress, setProcessingProgress] = useState(0);
   const [error, setError] = useState('');
   const [fileName, setFileName] = useState('');
 
@@ -39,8 +34,8 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
         setError('Please select a PDF file');
         return;
       }
-      if (selectedFile.size > 50 * 1024 * 1024) { // 50MB limit (no longer constrained by edge function)
-        setError('File size must be less than 50MB');
+      if (selectedFile.size > 100 * 1024 * 1024) { // 100MB limit (we'll chunk it)
+        setError('File size must be less than 100MB');
         return;
       }
       setFile(selectedFile);
@@ -49,41 +44,22 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
     }
   };
 
-  const extractTextFromPDF = async (file: File): Promise<string> => {
-    setIsExtractingText(true);
-    setExtractProgress(0);
+  const splitPDFIntoChunks = async (file: File, chunkSizeMB: number = 18): Promise<File[]> => {
+    const chunkSize = chunkSizeMB * 1024 * 1024; // Convert to bytes
+    const chunks: File[] = [];
     
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      let extractedText = '';
-      
-      const totalPages = pdf.numPages;
-      console.log(`PDF has ${totalPages} pages`);
-
-      for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
-        const page = await pdf.getPage(pageNum);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items
-          .map((item: any) => item.str)
-          .join(' ');
-        
-        extractedText += `\n\n--- Page ${pageNum} ---\n${pageText}`;
-        
-        // Update progress
-        const progress = (pageNum / totalPages) * 100;
-        setExtractProgress(progress);
-      }
-
-      console.log(`Extracted ${extractedText.length} characters from PDF`);
-      return extractedText.trim();
-    } catch (error) {
-      console.error('PDF text extraction error:', error);
-      throw new Error('Failed to extract text from PDF');
-    } finally {
-      setIsExtractingText(false);
-      setExtractProgress(0);
+    for (let start = 0; start < file.size; start += chunkSize) {
+      const end = Math.min(start + chunkSize, file.size);
+      const chunkBlob = file.slice(start, end);
+      const chunkIndex = Math.floor(start / chunkSize) + 1;
+      const chunkFile = new File([chunkBlob], `${file.name}_chunk_${chunkIndex}`, {
+        type: file.type
+      });
+      chunks.push(chunkFile);
     }
+    
+    console.log(`Split PDF into ${chunks.length} chunks`);
+    return chunks;
   };
 
   const handleUpload = useCallback(async () => {
@@ -93,16 +69,11 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
     }
 
     setIsUploading(true);
+    setIsProcessing(true);
+    setProcessingProgress(0);
     setError('');
 
     try {
-      // Extract text from PDF client-side
-      const extractedText = await extractTextFromPDF(file);
-      
-      if (!extractedText || extractedText.length < 100) {
-        throw new Error('Could not extract meaningful text from PDF. Please ensure it\'s a valid disclosure document.');
-      }
-
       // Get the disclosure report ID from the parent component
       const reportId = await onAnalysisStart();
       
@@ -123,46 +94,115 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
         throw new Error('Agent profile not found');
       }
 
-      // Upload the original PDF file to storage for reference
       const timestamp = new Date().getTime();
       const fileExtension = file.name.split('.').pop();
-      const filePath = `${user.id}/${timestamp}-${reportId}.${fileExtension}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('disclosure-uploads')
-        .upload(filePath, file);
+      // Check if file needs to be chunked (over 20MB)
+      const fileSizeMB = file.size / (1024 * 1024);
+      
+      if (fileSizeMB > 20) {
+        console.log(`Large PDF detected (${fileSizeMB.toFixed(2)}MB), splitting into chunks...`);
+        
+        // Split PDF into chunks
+        const chunks = await splitPDFIntoChunks(file, 18); // Use 18MB chunks for safety
+        const chunkResults: any[] = [];
 
-      if (uploadError) {
-        throw new Error(`Upload failed: ${uploadError.message}`);
-      }
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+          const chunkPath = `${user.id}/${timestamp}-${reportId}_chunk_${i + 1}.${fileExtension}`;
+          
+          setProcessingProgress(((i + 1) / chunks.length) * 50); // First 50% for upload
+          
+          // Upload chunk to storage
+          const { error: uploadError } = await supabase.storage
+            .from('disclosure-uploads')
+            .upload(chunkPath, chunk);
 
-      // Start direct analysis with extracted text
-      const { data: analysisResult, error: analysisError } = await supabase.functions.invoke(
-        'analyze-pdf-disclosure',
-        {
-          body: { 
-            pdfText: extractedText,
-            reportId: reportId,
-            fileName: file.name
+          if (uploadError) {
+            throw new Error(`Chunk upload failed: ${uploadError.message}`);
           }
+
+          // Analyze chunk
+          const { data: chunkResult, error: analysisError } = await supabase.functions.invoke(
+            'analyze-pdf-disclosure',
+            {
+              body: { 
+                reportId: reportId,
+                bucket: 'disclosure-uploads',
+                filePath: chunkPath,
+                fileName: `${file.name} (chunk ${i + 1}/${chunks.length})`
+              }
+            }
+          );
+
+          if (analysisError) {
+            console.error(`Chunk ${i + 1} analysis failed:`, analysisError);
+            // Continue with other chunks
+          } else {
+            chunkResults.push(chunkResult);
+          }
+          
+          setProcessingProgress(50 + ((i + 1) / chunks.length) * 50); // Last 50% for analysis
         }
-      );
 
-      if (analysisError) {
-        throw new Error(`Analysis failed: ${analysisError.message}`);
+        toast({
+          title: "Analysis Complete",
+          description: `Successfully processed ${chunkResults.length}/${chunks.length} chunks of your PDF.`,
+        });
+
+        onAnalysisComplete({
+          success: true,
+          message: `Analysis completed for ${chunkResults.length}/${chunks.length} chunks`,
+          result: { chunks: chunkResults, totalChunks: chunks.length }
+        });
+
+      } else {
+        // Single file processing (under 20MB)
+        const filePath = `${user.id}/${timestamp}-${reportId}.${fileExtension}`;
+
+        setProcessingProgress(25);
+
+        // Upload file to storage
+        const { error: uploadError } = await supabase.storage
+          .from('disclosure-uploads')
+          .upload(filePath, file);
+
+        if (uploadError) {
+          throw new Error(`Upload failed: ${uploadError.message}`);
+        }
+
+        setProcessingProgress(50);
+
+        // Start analysis
+        const { data: analysisResult, error: analysisError } = await supabase.functions.invoke(
+          'analyze-pdf-disclosure',
+          {
+            body: { 
+              reportId: reportId,
+              bucket: 'disclosure-uploads',
+              filePath: filePath,
+              fileName: file.name
+            }
+          }
+        );
+
+        setProcessingProgress(100);
+
+        if (analysisError) {
+          throw new Error(`Analysis failed: ${analysisError.message}`);
+        }
+
+        toast({
+          title: "Analysis Complete",
+          description: "Your disclosure document has been successfully analyzed!",
+        });
+
+        onAnalysisComplete({
+          success: true,
+          message: 'Analysis completed successfully',
+          result: analysisResult
+        });
       }
-
-      toast({
-        title: "Analysis Complete",
-        description: "Your disclosure document has been successfully analyzed!",
-      });
-
-      // Notify parent that analysis completed successfully
-      onAnalysisComplete({
-        success: true,
-        message: 'Analysis completed successfully',
-        result: analysisResult
-      });
 
     } catch (error) {
       console.error('Analysis error:', error);
@@ -174,6 +214,8 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
       });
     } finally {
       setIsUploading(false);
+      setIsProcessing(false);
+      setProcessingProgress(0);
     }
   }, [file, onAnalysisStart, onAnalysisComplete]);
 
@@ -245,7 +287,7 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
                 type="file"
                 accept=".pdf"
                 onChange={handleFileChange}
-                disabled={isUploading || isExtractingText}
+                disabled={isUploading}
                 className="cursor-pointer"
               />
             </div>
@@ -254,16 +296,12 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
               <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
                 <FileText className="w-4 h-4 text-muted-foreground" />
                 <span className="text-sm">{fileName}</span>
-              </div>
-            )}
-
-            {isExtractingText && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span>Extracting text from PDF...</span>
-                  <span>{Math.round(extractProgress)}%</span>
-                </div>
-                <Progress value={extractProgress} className="w-full" />
+                {file && (
+                  <span className="text-xs text-muted-foreground ml-auto">
+                    {(file.size / (1024 * 1024)).toFixed(1)}MB
+                    {file.size > 20 * 1024 * 1024 && " (will be chunked)"}
+                  </span>
+                )}
               </div>
             )}
 
@@ -275,18 +313,18 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
 
             <Button 
               onClick={handleUpload} 
-              disabled={!file || isUploading || isExtractingText}
+              disabled={!file || isUploading}
               className="w-full"
             >
               {isUploading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  {isExtractingText ? 'Extracting Text...' : 'Analyzing...'}
+                  Uploading & Analyzing...
                 </>
               ) : (
                 <>
                   <Upload className="w-4 h-4 mr-2" />
-                  Extract Text & Analyze
+                  Upload and Analyze PDF
                 </>
               )}
             </Button>
@@ -298,13 +336,20 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
                 <Clock className="w-12 h-12 text-primary animate-pulse" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold">Processing in Background</h3>
+                <h3 className="text-lg font-semibold">Processing PDF</h3>
                 <p className="text-muted-foreground">
-                  Your file has been uploaded and is being analyzed by AI. You can safely close this page.
+                  {file && file.size > 20 * 1024 * 1024 
+                    ? 'Large PDF detected - splitting into chunks for analysis...'
+                    : 'Analyzing your disclosure document...'
+                  }
                 </p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  You'll receive a notification when the analysis is complete.
-                </p>
+              </div>
+              <div className="w-full max-w-xs">
+                <div className="flex items-center justify-between text-sm mb-2">
+                  <span>Progress</span>
+                  <span>{Math.round(processingProgress)}%</span>
+                </div>
+                <Progress value={processingProgress} className="w-full" />
               </div>
               <Button
                 variant="outline"
@@ -313,9 +358,10 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
                   setUploadJobId(null);
                   setFile(null);
                   setFileName('');
+                  setProcessingProgress(0);
                 }}
               >
-                Upload Another File
+                Cancel & Upload Another File
               </Button>
             </div>
           </div>
