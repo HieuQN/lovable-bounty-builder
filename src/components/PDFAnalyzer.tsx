@@ -4,9 +4,14 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Alert, AlertDescription } from './ui/alert';
+import { Progress } from './ui/progress';
 import { Loader2, Upload, FileText, CheckCircle, Clock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from './ui/use-toast';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Configure PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
 
 interface PDFAnalyzerProps {
   reportId: string;
@@ -22,6 +27,8 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadJobId, setUploadJobId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isExtractingText, setIsExtractingText] = useState(false);
+  const [extractProgress, setExtractProgress] = useState(0);
   const [error, setError] = useState('');
   const [fileName, setFileName] = useState('');
 
@@ -32,13 +39,50 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
         setError('Please select a PDF file');
         return;
       }
-      if (selectedFile.size > 20 * 1024 * 1024) { // 20MB limit
-        setError('File size must be less than 20MB');
+      if (selectedFile.size > 50 * 1024 * 1024) { // 50MB limit (no longer constrained by edge function)
+        setError('File size must be less than 50MB');
         return;
       }
       setFile(selectedFile);
       setFileName(selectedFile.name);
       setError('');
+    }
+  };
+
+  const extractTextFromPDF = async (file: File): Promise<string> => {
+    setIsExtractingText(true);
+    setExtractProgress(0);
+    
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let extractedText = '';
+      
+      const totalPages = pdf.numPages;
+      console.log(`PDF has ${totalPages} pages`);
+
+      for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items
+          .map((item: any) => item.str)
+          .join(' ');
+        
+        extractedText += `\n\n--- Page ${pageNum} ---\n${pageText}`;
+        
+        // Update progress
+        const progress = (pageNum / totalPages) * 100;
+        setExtractProgress(progress);
+      }
+
+      console.log(`Extracted ${extractedText.length} characters from PDF`);
+      return extractedText.trim();
+    } catch (error) {
+      console.error('PDF text extraction error:', error);
+      throw new Error('Failed to extract text from PDF');
+    } finally {
+      setIsExtractingText(false);
+      setExtractProgress(0);
     }
   };
 
@@ -52,6 +96,13 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
     setError('');
 
     try {
+      // Extract text from PDF client-side
+      const extractedText = await extractTextFromPDF(file);
+      
+      if (!extractedText || extractedText.length < 100) {
+        throw new Error('Could not extract meaningful text from PDF. Please ensure it\'s a valid disclosure document.');
+      }
+
       // Get the disclosure report ID from the parent component
       const reportId = await onAnalysisStart();
       
@@ -72,12 +123,11 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
         throw new Error('Agent profile not found');
       }
 
-      // Generate unique file path
+      // Upload the original PDF file to storage for reference
       const timestamp = new Date().getTime();
       const fileExtension = file.name.split('.').pop();
       const filePath = `${user.id}/${timestamp}-${reportId}.${fileExtension}`;
 
-      // Upload file to storage
       const { error: uploadError } = await supabase.storage
         .from('disclosure-uploads')
         .upload(filePath, file);
@@ -86,56 +136,39 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
         throw new Error(`Upload failed: ${uploadError.message}`);
       }
 
-      // Create upload job record
-      const { data: jobData, error: jobError } = await supabase
-        .from('disclosure_upload_jobs')
-        .insert({
-          bounty_id: reportId,
-          agent_id: agentProfile.id,
-          file_path: filePath,
-          file_name: file.name,
-          status: 'processing'
-        })
-        .select()
-        .single();
-
-      if (jobError) {
-        throw new Error(`Failed to create job: ${jobError.message}`);
-      }
-
-      setUploadJobId(jobData.id);
-      setIsProcessing(true);
-
-      // Start background processing
-      const { error: processError } = await supabase.functions.invoke(
-        'process-background-upload',
+      // Start direct analysis with extracted text
+      const { data: analysisResult, error: analysisError } = await supabase.functions.invoke(
+        'analyze-pdf-disclosure',
         {
-          body: { jobId: jobData.id }
+          body: { 
+            pdfText: extractedText,
+            reportId: reportId,
+            fileName: file.name
+          }
         }
       );
 
-      if (processError) {
-        console.error('Background processing error:', processError);
-        // Don't throw here, as the job might still succeed
+      if (analysisError) {
+        throw new Error(`Analysis failed: ${analysisError.message}`);
       }
 
       toast({
-        title: "Upload Successful",
-        description: "Your file is being processed in the background. You will be notified when complete.",
+        title: "Analysis Complete",
+        description: "Your disclosure document has been successfully analyzed!",
       });
 
-      // Notify parent that upload started successfully
+      // Notify parent that analysis completed successfully
       onAnalysisComplete({
         success: true,
-        message: 'File uploaded successfully. Processing in background.',
-        jobId: jobData.id
+        message: 'Analysis completed successfully',
+        result: analysisResult
       });
 
     } catch (error) {
-      console.error('Upload error:', error);
-      setError(error instanceof Error ? error.message : 'Upload failed');
+      console.error('Analysis error:', error);
+      setError(error instanceof Error ? error.message : 'Analysis failed');
       toast({
-        title: "Upload Failed",
+        title: "Analysis Failed",
         description: error instanceof Error ? error.message : 'Unknown error occurred',
         variant: "destructive",
       });
@@ -212,7 +245,7 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
                 type="file"
                 accept=".pdf"
                 onChange={handleFileChange}
-                disabled={isUploading}
+                disabled={isUploading || isExtractingText}
                 className="cursor-pointer"
               />
             </div>
@@ -224,6 +257,16 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
               </div>
             )}
 
+            {isExtractingText && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span>Extracting text from PDF...</span>
+                  <span>{Math.round(extractProgress)}%</span>
+                </div>
+                <Progress value={extractProgress} className="w-full" />
+              </div>
+            )}
+
             {error && (
               <Alert variant="destructive">
                 <AlertDescription>{error}</AlertDescription>
@@ -232,18 +275,18 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
 
             <Button 
               onClick={handleUpload} 
-              disabled={!file || isUploading}
+              disabled={!file || isUploading || isExtractingText}
               className="w-full"
             >
               {isUploading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Uploading...
+                  {isExtractingText ? 'Extracting Text...' : 'Analyzing...'}
                 </>
               ) : (
                 <>
                   <Upload className="w-4 h-4 mr-2" />
-                  Upload and Analyze
+                  Extract Text & Analyze
                 </>
               )}
             </Button>

@@ -10,6 +10,7 @@ const corsHeaders = {
 interface AnalysisRequest {
   pdfText?: string;
   reportId: string;
+  fileName?: string;
   bucket?: string;
   filePath?: string;
 }
@@ -64,26 +65,31 @@ serve(async (req) => {
 
   let reportId: string | undefined;
   try {
-    const { pdfText, reportId: requestReportId, bucket, filePath }: AnalysisRequest = await req.json();
-    reportId = requestReportId;
-    console.log(`Starting PDF analysis for report: ${reportId}`);
-    console.log(`PDF text length: ${pdfText?.length || 0} characters`);
+    const request: AnalysisRequest = await req.json();
+    reportId = request.reportId;
+    console.log('Received request:', { 
+      reportId: request.reportId, 
+      hasText: !!request.pdfText,
+      fileName: request.fileName,
+      textLength: request.pdfText?.length || 0
+    });
 
-    // If we have adequate text, analyze from text
-    if (pdfText && pdfText.length > 1000) {
-      // No token limit - process full text
-      return await processPdfAnalysis(pdfText, reportId);
+    // Check if we have text directly (client-side extraction)
+    if (request.pdfText && request.pdfText.length > 100) {
+      console.log(`Processing with provided text (${request.pdfText.length} characters)`);
+      return await processPdfAnalysis(request.pdfText, request.reportId);
     }
 
-    // Otherwise, try analyzing directly from the PDF file in storage
-    if (bucket && filePath) {
+    // Legacy support: try analyzing from storage if bucket/filePath provided
+    if (request.bucket && request.filePath) {
+      console.log('Processing PDF from storage (legacy)');
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
       const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
       const { data: fileData, error: downloadErr } = await supabase.storage
-        .from(bucket)
-        .download(filePath);
+        .from(request.bucket)
+        .download(request.filePath);
 
       if (downloadErr || !fileData) {
         throw new Error(`Failed to download PDF from storage: ${downloadErr?.message}`);
@@ -98,7 +104,7 @@ serve(async (req) => {
         const largeBuffer = await headSlice.arrayBuffer();
         const extractedText = await extractTextFromPDF(largeBuffer);
         console.log('Using memory-safe text analysis path for large PDF (head slice)');
-        return await processPdfAnalysis(extractedText, reportId);
+        return await processPdfAnalysis(extractedText, request.reportId);
       }
 
       // Small files: allow base64 PDF analysis
@@ -107,10 +113,16 @@ serve(async (req) => {
       let binary = '';
       for (let i = 0; i < uint8.length; i++) binary += String.fromCharCode(uint8[i]);
       const base64 = btoa(binary);
-      return await processPdfAnalysisFromPDF(base64, reportId);
+      return await processPdfAnalysisFromPDF(base64, request.reportId);
     }
 
-    throw new Error('No valid input provided: pdfText or bucket+filePath required');
+    return new Response(
+      JSON.stringify({ error: 'No PDF text provided. Please ensure client-side text extraction is working.' }),
+      { 
+        status: 400, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    );
     
   } catch (error) {
     console.error('Error in analyze-pdf-disclosure function:', error);
