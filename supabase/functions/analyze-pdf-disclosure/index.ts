@@ -27,6 +27,35 @@ interface AnalysisResult {
   components: AnalysisComponent[];
 }
 
+// Memory-safe plain-text extractor for large PDFs (best-effort)
+async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
+  try {
+    const bytes = new Uint8Array(pdfBuffer);
+    let text = '';
+    for (let i = 0; i < bytes.length; i++) {
+      const b = bytes[i];
+      // Keep printable ASCII and normalize whitespace
+      if (b === 9 || b === 10 || b === 13) {
+        text += ' ';
+      } else if (b >= 32 && b <= 126) {
+        text += String.fromCharCode(b);
+      } else {
+        text += ' ';
+      }
+      // Hard stop to control memory during extraction
+      if (text.length > 600000) break;
+    }
+    text = text.replace(/\s+/g, ' ').trim();
+    if (text.length < 500) {
+      return '[Limited text extracted from PDF. Proceeding with best-effort analysis.]';
+    }
+    return text;
+  } catch (err) {
+    console.error('extractTextFromPDF failed:', err);
+    return '[Failed to extract text from PDF. Proceeding with limited context.]';
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -63,9 +92,25 @@ serve(async (req) => {
       if (downloadErr || !fileData) {
         throw new Error(`Failed to download PDF from storage: ${downloadErr?.message}`);
       }
-      const arrayBuffer = await fileData.arrayBuffer();
+      const blob = fileData as Blob;
+      const sizeMB = (blob.size || 0) / (1024 * 1024);
+      console.log(`Storage PDF size: ${sizeMB.toFixed(2)} MB`);
+
+      // For large files, avoid base64 payloads and run text-only analysis
+      if (sizeMB > 8) {
+        const headSlice = blob.slice(0, 8 * 1024 * 1024); // read first 8MB only
+        const largeBuffer = await headSlice.arrayBuffer();
+        const extractedText = await extractTextFromPDF(largeBuffer);
+        const textForAI = extractedText.length > 200000
+          ? extractedText.substring(0, 200000) + "\n\n[Note: Document was truncated due to size limitations]"
+          : extractedText;
+        console.log('Using memory-safe text analysis path for large PDF (head slice)');
+        return await processPdfAnalysis(textForAI, reportId);
+      }
+
+      // Small files: allow base64 PDF analysis
+      const arrayBuffer = await blob.arrayBuffer();
       const uint8 = new Uint8Array(arrayBuffer);
-      // Base64 encode
       let binary = '';
       for (let i = 0; i < uint8.length; i++) binary += String.fromCharCode(uint8[i]);
       const base64 = btoa(binary);
