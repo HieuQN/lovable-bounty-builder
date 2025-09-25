@@ -133,10 +133,10 @@ export const UploadDisclosureModal = ({
         });
         return;
       }
-      if (selectedFile.size > 20 * 1024 * 1024) {
+      if (selectedFile.size > 100 * 1024 * 1024) {
         toast({
           title: "File Too Large",
-          description: "Please upload a PDF under 20MB",
+          description: "Please upload a PDF under 100MB",
           variant: "destructive",
         });
         return;
