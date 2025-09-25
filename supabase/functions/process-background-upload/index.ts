@@ -157,6 +157,7 @@ serve(async (req) => {
         property_id: bounty.property_id,
         uploaded_by_agent_id: job.agent_id,
         status: 'processing',
+        report_summary_basic: 'Processing disclosure analysis...',
         raw_pdf_url: `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/disclosure-uploads/${job.file_path}`
       })
       .select()
@@ -175,6 +176,8 @@ serve(async (req) => {
       });
     }
 
+    console.log(`Calling AI analysis for report: ${report.id}`);
+    
     // Call the AI analysis function with extracted text
     const { data: analysisResult, error: analysisError } = await supabaseClient.functions.invoke(
       'analyze-pdf-disclosure',
@@ -188,6 +191,16 @@ serve(async (req) => {
 
     if (analysisError) {
       console.error('Error in AI analysis:', analysisError);
+      
+      // Update report with error
+      await supabaseClient
+        .from('disclosure_reports')
+        .update({ 
+          status: 'error',
+          report_summary_basic: `Analysis failed: ${analysisError.message}` 
+        })
+        .eq('id', report.id);
+        
       await supabaseClient.rpc('update_upload_job_status', {
         job_id: jobId,
         new_status: 'failed',

@@ -35,7 +35,8 @@ serve(async (req) => {
   try {
     const { pdfText, reportId: requestReportId }: AnalysisRequest = await req.json();
     reportId = requestReportId;
-    console.log('Starting PDF analysis for report:', reportId);
+    console.log(`Starting PDF analysis for report: ${reportId}`);
+    console.log(`PDF text length: ${pdfText?.length || 0} characters`);
     
     // Check if PDF text is too large (approximate token limit)
     if (pdfText.length > 800000) { // ~200k tokens
@@ -92,11 +93,12 @@ async function processPdfAnalysis(pdfText: string, reportId: string) {
 
     // Call Gemini API for analysis
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+    console.log(`Gemini API Key configured: ${!!geminiApiKey}`);
     if (!geminiApiKey) {
       throw new Error('GEMINI_API_KEY not configured');
     }
 
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${geminiApiKey}`;
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
 
     const systemPrompt = `You are an expert real estate analyst. Your task is to analyze the provided real estate disclosure document text, which is formatted with page numbers. 
 1.  Provide a concise overall summary of the property's condition based on the disclosure.
@@ -151,18 +153,24 @@ Return the result in the specified JSON format.`;
     
     while (retries > 0) {
       try {
+        console.log(`Attempt ${4 - retries}, making request to Gemini API...`);
         response = await fetch(apiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
 
+        console.log(`Gemini API response status: ${response.status}`);
+        
         if (response.ok) {
           const result = await response.json();
+          console.log(`Gemini API result received, candidates: ${result.candidates?.length || 0}`);
+          
           const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
           if (jsonText) {
+            console.log(`Analysis text length: ${jsonText.length} characters`);
             const analysisResult: AnalysisResult = JSON.parse(jsonText);
-            console.log('Analysis completed successfully');
+            console.log(`Analysis completed successfully, components: ${analysisResult.components?.length || 0}`);
 
             // Calculate overall risk score
             const riskCounts = { Low: 0, Medium: 0, High: 0, Unknown: 0 };
