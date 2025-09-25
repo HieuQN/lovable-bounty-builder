@@ -205,23 +205,22 @@ export const UploadDisclosureModal = ({
         .from('disclosures')
         .getPublicUrl(fileName);
 
-      // Create disclosure report
-      const { error: reportError } = await supabase
-        .from('disclosure_reports')
-        .insert({
+      // Start AI analysis via edge function (no direct DB insert here)
+      const { error: funcError } = await supabase.functions.invoke('extract-analyze-disclosure', {
+        body: {
           property_id: propertyId,
-          uploaded_by_agent_id: agentProfile.id,
-          raw_pdf_url: urlData.publicUrl,
-          status: 'complete',
-          report_summary_basic: notes || 'Disclosure document uploaded',
-          dummy_analysis_complete: true
-        });
+          agent_profile_id: agentProfile.id,
+          bucket: 'disclosures',
+          file_path: fileName,
+          bounty_id: bountyId || null,
+        },
+      });
 
-      if (reportError) throw reportError;
+      if (funcError) throw funcError;
 
       toast({
-        title: "Disclosure Uploaded Successfully!",
-        description: "You've earned 10 credits for this new disclosure",
+        title: "Disclosure Upload Received",
+        description: "AI analysis started. You’ll see the report when complete.",
       });
 
       onSuccess();
