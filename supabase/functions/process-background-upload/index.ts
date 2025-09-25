@@ -2,43 +2,66 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// PDF parsing function
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+// Simple PDF text extraction function
 async function extractTextFromPDF(pdfBuffer: ArrayBuffer): Promise<string> {
   try {
-    // Simple text extraction - in production, use a proper PDF library
+    // Convert to Uint8Array for text extraction
     const uint8Array = new Uint8Array(pdfBuffer);
-    const decoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: false });
-    let text = decoder.decode(uint8Array);
     
-    // Basic PDF text extraction (this is a fallback - in production use proper PDF parsing)
-    // Remove PDF binary content and extract readable text
-    const textMatch = text.match(/BT\s*(.*?)\s*ET/gs);
-    if (textMatch) {
-      text = textMatch.map(match => match.replace(/BT\s*|\s*ET/g, '')).join(' ');
+    // Simple text extraction approach for PDFs
+    // This is a basic implementation - in production, use a proper PDF parsing library
+    let text = '';
+    let i = 0;
+    
+    // Look for text streams in PDF
+    while (i < uint8Array.length - 1) {
+      // Look for "BT" (Begin Text) markers
+      if (uint8Array[i] === 66 && uint8Array[i + 1] === 84) { // "BT"
+        i += 2;
+        let textContent = '';
+        
+        // Extract text until "ET" (End Text) marker
+        while (i < uint8Array.length - 1) {
+          if (uint8Array[i] === 69 && uint8Array[i + 1] === 84) { // "ET"
+            break;
+          }
+          
+          // Extract readable characters
+          if (uint8Array[i] >= 32 && uint8Array[i] <= 126) {
+            textContent += String.fromCharCode(uint8Array[i]);
+          } else if (uint8Array[i] === 10 || uint8Array[i] === 13) {
+            textContent += ' ';
+          }
+          i++;
+        }
+        
+        text += textContent + ' ';
+      }
+      i++;
     }
     
-    // Clean up the text
+    // Clean up extracted text
     text = text
-      .replace(/[^\x20-\x7E\s]/g, ' ') // Remove non-printable characters
+      .replace(/[^\w\s\.\,\;\:\!\?\-\$\%\(\)]/g, ' ') // Keep basic punctuation
       .replace(/\s+/g, ' ') // Normalize whitespace
       .trim();
     
-    if (text.length < 100) {
-      // If extraction failed, return a descriptive message
-      return `PDF document uploaded with ${uint8Array.length} bytes of content. Manual text extraction required for detailed analysis.`;
+    // If we couldn't extract much text, provide a basic description
+    if (text.length < 50) {
+      text = `Property disclosure document uploaded. File size: ${uint8Array.length} bytes. Contains property information and disclosures requiring manual review for detailed analysis.`;
     }
     
     return text;
   } catch (error) {
     console.error('PDF text extraction failed:', error);
-    return 'PDF text extraction failed. Manual review required.';
+    return 'PDF document uploaded successfully. Text extraction failed - manual review required for detailed analysis.';
   }
 }
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -202,7 +225,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in background processing:', error);
     return new Response(JSON.stringify({ 
-      error: error.message || 'Unknown error occurred' 
+      error: error instanceof Error ? error.message : 'Unknown error occurred' 
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

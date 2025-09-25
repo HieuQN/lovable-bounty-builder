@@ -24,7 +24,7 @@ interface ShowingRequest {
   };
 }
 
-const AgentShowingRequests = () => {
+export const AgentShowingRequests = () => {
   const [showingRequests, setShowingRequests] = useState<ShowingRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState<ShowingRequest | null>(null);
@@ -32,6 +32,27 @@ const AgentShowingRequests = () => {
 
   useEffect(() => {
     fetchShowingRequests();
+    
+    // Set up real-time subscription for showing requests
+    const channel = supabase
+      .channel('showing_requests_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'showing_requests'
+        },
+        () => {
+          console.log('Showing request updated, refreshing...');
+          fetchShowingRequests();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const [agentId, setAgentId] = useState<string>('');

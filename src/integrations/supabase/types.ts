@@ -595,6 +595,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cleanup_expired_showing_requests: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       create_notification: {
         Args: {
           p_message: string

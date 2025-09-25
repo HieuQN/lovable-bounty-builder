@@ -57,7 +57,7 @@ serve(async (req) => {
     // Use Puppeteer to generate PDF
     const puppeteer = await import('https://deno.land/x/puppeteer@16.2.0/mod.ts');
     
-    const browser = await puppeteer.launch({
+    const browser = await (puppeteer as any).launch({
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
     
@@ -88,7 +88,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error in generate-pdf-report function:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

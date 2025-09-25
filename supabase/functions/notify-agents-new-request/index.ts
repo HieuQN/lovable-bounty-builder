@@ -1,8 +1,6 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { Resend } from "npm:resend@2.0.0";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.56.0";
-
-const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,13 +26,10 @@ const handler = async (req: Request): Promise<Response> => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get all agent profiles with their email addresses
+    // Get all agent profiles
     const { data: agents, error: agentsError } = await supabase
       .from('agent_profiles')
-      .select(`
-        id,
-        profiles!inner(email, first_name)
-      `);
+      .select('id, user_id');
 
     if (agentsError) {
       console.error("Error fetching agents:", agentsError);
@@ -58,63 +53,29 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // Send emails to all agents
-    const emailPromises = agents.map(async (agent) => {
-      const agentEmail = agent.profiles.email;
-      const agentName = agent.profiles.first_name || "Agent";
-
-      return resend.emails.send({
-        from: "IntelleHouse <notifications@lovable.app>",
-        to: [agentEmail],
-        subject: `New Disclosure Request Available - ${propertyAddress}`,
-        html: `
-          <div style="max-width: 600px; margin: 0 auto; padding: 20px; font-family: Arial, sans-serif;">
-            <h1 style="color: #2563eb; margin-bottom: 20px;">New Disclosure Request Available</h1>
-            
-            <p>Hello ${agentName},</p>
-            
-            <p>A new disclosure request has been submitted and is now available for claiming!</p>
-            
-            <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
-              <h2 style="margin: 0 0 10px 0; color: #1e293b;">Property Details</h2>
-              <p style="margin: 5px 0;"><strong>Address:</strong> ${propertyAddress}</p>
-              <p style="margin: 5px 0;"><strong>Bounty ID:</strong> ${bountyId}</p>
-            </div>
-            
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${Deno.env.get('SITE_URL')}/agent-dashboard" 
-                 style="background: #2563eb; color: white; padding: 12px 24px; 
-                        text-decoration: none; border-radius: 6px; display: inline-block;">
-                View Available Requests
-              </a>
-            </div>
-            
-            <p style="color: #64748b; font-size: 14px; margin-top: 30px;">
-              This request is now available for claiming in your agent dashboard. 
-              The first agent to claim it and upload the disclosure will earn credits.
-            </p>
-            
-            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;">
-            
-            <p style="color: #64748b; font-size: 12px; text-align: center;">
-              This email was sent by IntelleHouse. You're receiving this because you're a registered agent.
-            </p>
-          </div>
-        `,
+    // Create in-app notifications for all agents
+    const notificationPromises = agents.map(async (agent) => {
+      return supabase.functions.invoke('create-notification', {
+        body: {
+          user_id: agent.user_id,
+          message: `New disclosure request available for ${propertyAddress}`,
+          type: 'bounty_available',
+          url: '/agent-dashboard?tab=bounties'
+        }
       });
     });
 
-    const emailResults = await Promise.allSettled(emailPromises);
+    const notificationResults = await Promise.allSettled(notificationPromises);
     
-    const successCount = emailResults.filter(result => result.status === 'fulfilled').length;
-    const failureCount = emailResults.filter(result => result.status === 'rejected').length;
+    const successCount = notificationResults.filter(result => result.status === 'fulfilled').length;
+    const failureCount = notificationResults.filter(result => result.status === 'rejected').length;
 
-    console.log(`Notification emails sent - Success: ${successCount}, Failed: ${failureCount}`);
+    console.log(`In-app notifications sent - Success: ${successCount}, Failed: ${failureCount}`);
 
     return new Response(JSON.stringify({ 
       success: true, 
-      emailsSent: successCount,
-      emailsFailed: failureCount
+      notificationsSent: successCount,
+      notificationsFailed: failureCount
     }), {
       status: 200,
       headers: {
@@ -122,10 +83,10 @@ const handler = async (req: Request): Promise<Response> => {
         ...corsHeaders,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error sending agent notifications:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
       {
         status: 500,
         headers: { "Content-Type": "application/json", ...corsHeaders },
