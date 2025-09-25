@@ -46,3 +46,9 @@ verify_jwt = false
 
 [functions.analyze-pdf-disclosure]
 verify_jwt = false
+
+[functions.process-background-upload]
+verify_jwt = false
+
+[functions.send-disclosure-notification]
+verify_jwt = false

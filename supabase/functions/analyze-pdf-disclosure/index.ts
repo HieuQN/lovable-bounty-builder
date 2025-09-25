@@ -391,37 +391,37 @@ Return the result in the specified JSON format.`;
               source_page: comp.sourcePage
             }));
 
-            // Update the report with analysis results
-            const { error: updateError } = await supabase
-              .from('disclosure_reports')
-              .update({
-                status: 'complete',
-                risk_score: overallRiskScore,
-                report_summary_basic: analysisResult.summary,
-                report_summary_full: JSON.stringify({
-                  summary: analysisResult.summary,
-                  findings: findings,
-                  total_components: analysisResult.components.length,
-                  risk_breakdown: riskCounts
-                }),
-                dummy_analysis_complete: true
-              })
-              .eq('id', reportId);
+        // Update the report with analysis results
+        const { error: updateError } = await supabase
+          .from('disclosure_reports')
+          .update({
+            status: 'complete',
+            risk_score: overallRiskScore,
+            report_summary_basic: analysisResult.summary,
+            report_summary_full: JSON.stringify({
+              summary: analysisResult.summary,
+              findings: findings,
+              total_components: analysisResult.components.length,
+              risk_breakdown: riskCounts
+            }),
+            dummy_analysis_complete: true
+          })
+          .eq('id', reportId);
 
-            if (updateError) {
-              throw updateError;
-            }
+        if (updateError) {
+          throw updateError;
+        }
 
-            // Persist success log
-            await supabase.from('analysis_logs').insert({
-              report_id: reportId,
-              function_name: 'analyze-pdf-disclosure',
-              level: 'info',
-              message: 'Report updated with Gemini analysis',
-              context: { overallRiskScore, riskCounts }
-            });
+        // Persist success log
+        await supabase.from('analysis_logs').insert({
+          report_id: reportId,
+          function_name: 'analyze-pdf-disclosure',
+          level: 'info',
+          message: 'Report updated with Gemini analysis',
+          context: { overallRiskScore, riskCounts }
+        });
 
-            console.log('Successfully updated report with analysis results');
+        console.log('Successfully updated report with analysis results');
 
             return new Response(JSON.stringify({ 
               success: true, 

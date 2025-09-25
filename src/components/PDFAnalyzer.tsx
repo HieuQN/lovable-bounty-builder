@@ -121,13 +121,13 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
 
       toast({
         title: "Upload Successful",
-        description: "Your file is being processed in the background. You can leave this page.",
+        description: "Your file is being processed in the background. You will be notified when complete.",
       });
 
       // Notify parent that upload started successfully
       onAnalysisComplete({
         success: true,
-        message: 'File uploaded and processing started',
+        message: 'File uploaded successfully. Processing in background.',
         jobId: jobData.id
       });
 
@@ -257,10 +257,10 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
               <div>
                 <h3 className="text-lg font-semibold">Processing in Background</h3>
                 <p className="text-muted-foreground">
-                  Your file has been uploaded and is being processed. You can safely leave this page.
+                  Your file has been uploaded and is being analyzed by AI. You can safely close this page.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2">
-                  You'll be notified when the analysis is complete.
+                  You'll receive a notification when the analysis is complete.
                 </p>
               </div>
               <Button

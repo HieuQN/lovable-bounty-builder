@@ -86,211 +86,213 @@ serve(async (req) => {
 
     console.log(`Starting background processing for job: ${jobId}`);
 
-    // Get job details
-    const { data: job, error: jobError } = await supabaseClient
-      .from('disclosure_upload_jobs')
-      .select('*')
-      .eq('id', jobId)
-      .single();
+    // Start background task for large file processing
+    const backgroundTask = async () => {
+      try {
+        // Get job details
+        const { data: job, error: jobError } = await supabaseClient
+          .from('disclosure_upload_jobs')
+          .select('*')
+          .eq('id', jobId)
+          .single();
 
-    if (jobError || !job) {
-      console.error('Error fetching job:', jobError);
-      return new Response(JSON.stringify({ error: 'Job not found' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    console.log(`Processing file: ${job.file_path}`);
-
-    // Log job fetched
-    await supabaseClient.from('analysis_logs').insert({
-      job_id: jobId,
-      function_name: 'process-background-upload',
-      level: 'info',
-      message: 'Job fetched',
-      context: { file_path: job.file_path, agent_id: job.agent_id, bounty_id: job.bounty_id }
-    });
-
-    // Download the file from storage
-    const { data: fileData, error: downloadError } = await supabaseClient
-      .storage
-      .from('disclosure-uploads')
-      .download(job.file_path);
-
-    if (downloadError || !fileData) {
-      console.error('Error downloading file:', downloadError);
-      await supabaseClient.from('analysis_logs').insert({
-        job_id: jobId,
-        function_name: 'process-background-upload',
-        level: 'error',
-        message: 'Failed to download file from storage',
-        context: { error: downloadError?.message, file_path: job.file_path }
-      });
-      await supabaseClient.rpc('update_upload_job_status', {
-        job_id: jobId,
-        new_status: 'failed',
-        error_msg: 'Failed to download file'
-      });
-      return new Response(JSON.stringify({ error: 'Failed to download file' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Convert file to ArrayBuffer and extract text
-    const arrayBuffer = await fileData.arrayBuffer();
-    console.log(`Extracting text from PDF: ${job.file_name}`);
-    
-    // Extract text from PDF
-    const pdfText = await extractTextFromPDF(arrayBuffer);
-    console.log(`Extracted ${pdfText.length} characters from PDF`);
-    
-    // Log extraction result
-    await supabaseClient.from('analysis_logs').insert({
-      job_id: jobId,
-      function_name: 'process-background-upload',
-      level: 'info',
-      message: 'PDF text extracted',
-      context: { file_name: job.file_name, length: pdfText.length }
-    });
-
-    // Get the property_id from the bounty
-    const { data: bounty, error: bountyError } = await supabaseClient
-      .from('disclosure_bounties')
-      .select('property_id')
-      .eq('id', job.bounty_id)
-      .single();
-
-    if (bountyError || !bounty) {
-      console.error('Error fetching bounty:', bountyError);
-      await supabaseClient.rpc('update_upload_job_status', {
-        job_id: jobId,
-        new_status: 'failed',
-        error_msg: 'Bounty not found'
-      });
-      return new Response(JSON.stringify({ error: 'Bounty not found' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Create disclosure report first
-    const { data: report, error: reportError } = await supabaseClient
-      .from('disclosure_reports')
-      .insert({
-        property_id: bounty.property_id,
-        uploaded_by_agent_id: job.agent_id,
-        status: 'processing',
-        report_summary_basic: 'Processing disclosure analysis...',
-        raw_pdf_url: `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/disclosure-uploads/${job.file_path}`
-      })
-      .select()
-      .single();
-
-    if (reportError || !report) {
-      console.error('Error creating report:', reportError);
-      await supabaseClient.rpc('update_upload_job_status', {
-        job_id: jobId,
-        new_status: 'failed',
-        error_msg: `Failed to create report: ${reportError?.message}`
-      });
-      return new Response(JSON.stringify({ error: 'Failed to create report' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Log report created
-    await supabaseClient.from('analysis_logs').insert({
-      job_id: jobId,
-      report_id: report.id,
-      function_name: 'process-background-upload',
-      level: 'info',
-      message: 'Report created',
-      context: { report_id: report.id, property_id: bounty.property_id }
-    });
-
-    console.log(`Calling AI analysis for report: ${report.id}`);
-    
-    // Call the AI analysis function with extracted text
-    const { data: analysisResult, error: analysisError } = await supabaseClient.functions.invoke(
-      'analyze-pdf-disclosure',
-      {
-        body: { 
-          pdfText: pdfText,
-          reportId: report.id
+        if (jobError || !job) {
+          console.error('Error fetching job:', jobError);
+          await supabaseClient.rpc('update_upload_job_status', {
+            job_id: jobId,
+            new_status: 'failed',
+            error_msg: 'Job not found'
+          });
+          return;
         }
-      }
-    );
 
-    if (analysisError) {
-      console.error('Error in AI analysis:', analysisError);
-      
-      // Log AI analysis error
-      await supabaseClient.from('analysis_logs').insert({
-        job_id: jobId,
-        report_id: report.id,
-        function_name: 'process-background-upload',
-        level: 'error',
-        message: 'AI analysis failed',
-        context: { error: analysisError.message }
-      });
-      
-      // Update report with error
-      await supabaseClient
-        .from('disclosure_reports')
-        .update({ 
-          status: 'error',
-          report_summary_basic: `Analysis failed: ${analysisError.message}` 
-        })
-        .eq('id', report.id);
+        console.log(`Processing file: ${job.file_path}`);
+
+        // Log job fetched
+        await supabaseClient.from('analysis_logs').insert({
+          job_id: jobId,
+          function_name: 'process-background-upload',
+          level: 'info',
+          message: 'Job fetched, starting background processing',
+          context: { file_path: job.file_path, agent_id: job.agent_id, bounty_id: job.bounty_id }
+        });
+
+        // Get the property_id and agent info from the bounty
+        const { data: bounty, error: bountyError } = await supabaseClient
+          .from('disclosure_bounties')
+          .select('property_id')
+          .eq('id', job.bounty_id)
+          .single();
+
+        if (bountyError || !bounty) {
+          console.error('Error fetching bounty:', bountyError);
+          await supabaseClient.rpc('update_upload_job_status', {
+            job_id: jobId,
+            new_status: 'failed',
+            error_msg: 'Bounty not found'
+          });
+          return;
+        }
+
+        // Create disclosure report first with 'uploaded' status
+        const { data: report, error: reportError } = await supabaseClient
+          .from('disclosure_reports')
+          .insert({
+            property_id: bounty.property_id,
+            uploaded_by_agent_id: job.agent_id,
+            status: 'processing',
+            report_summary_basic: 'Document uploaded successfully. Starting AI analysis...',
+            raw_pdf_url: `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/disclosure-uploads/${job.file_path}`
+          })
+          .select()
+          .single();
+
+        if (reportError || !report) {
+          console.error('Error creating report:', reportError);
+          await supabaseClient.rpc('update_upload_job_status', {
+            job_id: jobId,
+            new_status: 'failed',
+            error_msg: `Failed to create report: ${reportError?.message}`
+          });
+          return;
+        }
+
+        // Log report created
+        await supabaseClient.from('analysis_logs').insert({
+          job_id: jobId,
+          report_id: report.id,
+          function_name: 'process-background-upload',
+          level: 'info',
+          message: 'Report created, calling AI analysis',
+          context: { report_id: report.id, property_id: bounty.property_id }
+        });
+
+        console.log(`Calling AI analysis for report: ${report.id}`);
         
-      await supabaseClient.rpc('update_upload_job_status', {
-        job_id: jobId,
-        new_status: 'failed',
-        error_msg: `AI analysis failed: ${analysisError.message}`
-      });
-      return new Response(JSON.stringify({ error: 'AI analysis failed' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+        // Call the AI analysis function with file path instead of extracted text
+        // This avoids memory issues with large files
+        const { data: analysisResult, error: analysisError } = await supabaseClient.functions.invoke(
+          'analyze-pdf-disclosure',
+          {
+            body: { 
+              reportId: report.id,
+              bucket: 'disclosure-uploads',
+              filePath: job.file_path
+            }
+          }
+        );
 
-    console.log('AI analysis completed successfully');
+        if (analysisError) {
+          console.error('Error in AI analysis:', analysisError);
+          
+          // Log AI analysis error
+          await supabaseClient.from('analysis_logs').insert({
+            job_id: jobId,
+            report_id: report.id,
+            function_name: 'process-background-upload',
+            level: 'error',
+            message: 'AI analysis failed',
+            context: { error: analysisError.message }
+          });
+          
+          // Update report with error
+          await supabaseClient
+            .from('disclosure_reports')
+            .update({ 
+              status: 'error',
+              report_summary_basic: `Analysis failed: ${analysisError.message}` 
+            })
+            .eq('id', report.id);
+            
+          await supabaseClient.rpc('update_upload_job_status', {
+            job_id: jobId,
+            new_status: 'failed',
+            error_msg: `AI analysis failed: ${analysisError.message}`
+          });
+          return;
+        }
 
-    // Log success
-    await supabaseClient.from('analysis_logs').insert({
-      job_id: jobId,
-      report_id: report.id,
-      function_name: 'process-background-upload',
-      level: 'info',
-      message: 'AI analysis completed successfully'
-    });
+        console.log('AI analysis completed successfully');
 
-    // Update bounty status to completed
-    await supabaseClient
-      .from('disclosure_bounties')
-      .update({ status: 'completed' })
-      .eq('id', job.bounty_id);
+        // Log success
+        await supabaseClient.from('analysis_logs').insert({
+          job_id: jobId,
+          report_id: report.id,
+          function_name: 'process-background-upload',
+          level: 'info',
+          message: 'AI analysis completed successfully'
+        });
 
-    // Mark job as completed
-    await supabaseClient.rpc('update_upload_job_status', {
-      job_id: jobId,
-      new_status: 'completed'
-    });
+        // Update bounty status to completed
+        await supabaseClient
+          .from('disclosure_bounties')
+          .update({ status: 'completed' })
+          .eq('id', job.bounty_id);
 
-    console.log(`Successfully processed job: ${jobId}`);
+        // Mark job as completed
+        await supabaseClient.rpc('update_upload_job_status', {
+          job_id: jobId,
+          new_status: 'completed'
+        });
 
+        // Get property address for notification
+        const { data: property } = await supabaseClient
+          .from('properties')
+          .select('street_address')
+          .eq('id', bounty.property_id)
+          .single();
+
+        // Get agent user_id
+        const { data: agentProfile } = await supabaseClient
+          .from('agent_profiles')
+          .select('user_id')
+          .eq('id', job.agent_id)
+          .single();
+
+        // Send notification to agent that analysis is complete
+        if (agentProfile && property) {
+          await supabaseClient.functions.invoke('send-disclosure-notification', {
+            body: {
+              propertyAddress: property.street_address,
+              reportId: report.id,
+              userId: agentProfile.user_id
+            }
+          });
+        }
+
+        console.log(`Successfully processed job: ${jobId}`);
+      } catch (error) {
+        console.error('Error in background task:', error);
+        await supabaseClient.from('analysis_logs').insert({
+          job_id: jobId,
+          function_name: 'process-background-upload',
+          level: 'error',
+          message: 'Background task failed',
+          context: { error: error instanceof Error ? error.message : String(error) }
+        });
+        
+        await supabaseClient.rpc('update_upload_job_status', {
+          job_id: jobId,
+          new_status: 'failed',
+          error_msg: `Background processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+        });
+      }
+    };
+
+    // Start background task without blocking response
+    backgroundTask().catch(console.error);
+
+    // Return immediate response to agent
     return new Response(JSON.stringify({ 
       success: true,
-      message: 'File processed successfully' 
+      message: 'File upload successful. Analysis is processing in the background. You will be notified when complete.',
+      jobId: jobId
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
-    console.error('Error in background processing:', error);
+    console.error('Error in upload processing:', error);
     return new Response(JSON.stringify({ 
       error: error instanceof Error ? error.message : 'Unknown error occurred' 
     }), {
