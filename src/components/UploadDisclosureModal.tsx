@@ -221,23 +221,47 @@ export const UploadDisclosureModal = ({
 
       if (uploadError) throw uploadError;
 
+      // Create disclosure report
+      const { data: report, error: reportError } = await supabase
+        .from('disclosure_reports')
+        .insert({
+          property_id: propertyId,
+          uploaded_by_agent_id: agentProfile.id,
+          status: 'pending',
+          raw_pdf_url: `disclosures/${fileName}`
+        })
+        .select('id')
+        .single();
+
+      if (reportError) throw reportError;
+
       // Upload complete UI
       if (progressTimer) window.clearInterval(progressTimer);
       setUploadProgress(100);
       setPhase('uploaded');
 
-      // Fire-and-forget: start AI analysis in background, do not block UI or mark failure
+      // Fire-and-forget: start AI analysis in background using direct PDF upload
       (async () => {
         try {
-          await supabase.functions.invoke('extract-analyze-disclosure', {
-            body: {
-              property_id: propertyId,
-              agent_profile_id: agentProfile.id,
-              bucket: 'disclosures',
-              file_path: fileName,
-              bounty_id: bountyId || null,
+          // Create FormData with the original file and report info
+          const formData = new FormData();
+          formData.append('pdf', file);
+          formData.append('reportId', report.id);
+          
+          // Call the direct PDF analysis function
+          const response = await fetch(`https://nehlmeomtpytwjsdunez.supabase.co/functions/v1/analyze-pdf-direct`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5laGxtZW9tdHB5dHdqc2R1bmV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU5NTI2NjAsImV4cCI6MjA3MTUyODY2MH0.ML6PR1ERc-VOFid1yiihO8oKCE639hQpM6vEv7uqC1E`,
             },
+            body: formData,
           });
+          
+          if (!response.ok) {
+            throw new Error(`Analysis failed: ${response.status}`);
+          }
+          
+          console.log('Direct PDF analysis started successfully');
         } catch (err) {
           console.error('Background analysis invocation error:', err);
         }
