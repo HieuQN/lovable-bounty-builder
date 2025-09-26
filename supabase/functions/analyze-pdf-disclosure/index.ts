@@ -33,9 +33,21 @@ serve(async (req) => {
 
   let reportId: string | undefined;
   try {
-    const { pdfText, reportId: requestReportId }: AnalysisRequest = await req.json();
+    const body = await req.json();
+    const { pdfText, reportId: requestReportId } = body;
     reportId = requestReportId;
+    
     console.log('Starting PDF analysis for report:', reportId);
+    console.log('PDF text provided:', !!pdfText);
+    console.log('PDF text length:', pdfText?.length || 0);
+    
+    if (!reportId || typeof reportId !== 'string') {
+      throw new Error('No valid report ID provided');
+    }
+    
+    if (!pdfText || typeof pdfText !== 'string') {
+      throw new Error('No valid PDF text provided');
+    }
     
     // Check if PDF text is too large (approximate token limit)
     if (pdfText.length > 800000) { // ~200k tokens
