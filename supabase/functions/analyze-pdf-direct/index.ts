@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.0';
+import { encode as base64Encode } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,13 +24,10 @@ serve(async (req) => {
 
     console.log('Processing PDF directly for report:', reportId);
     
-    // Convert PDF to text (basic extraction)
+    // Read original PDF bytes and prepare for inline upload (no preprocessing)
     const pdfBytes = await pdfFile.arrayBuffer();
-    const pdfText = await extractTextFromPDF(pdfBytes);
-    
-    if (!pdfText || pdfText.length < 100) {
-      throw new Error('Could not extract meaningful text from PDF');
-    }
+    const mimeType = (pdfFile.type || 'application/pdf');
+    const base64Data = base64Encode(new Uint8Array(pdfBytes));
 
     // Initialize Supabase
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -50,17 +48,15 @@ serve(async (req) => {
 
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${geminiApiKey}`;
     
-    const MAX_CHARS = 200000;
-    const analysisText = pdfText.length > MAX_CHARS
-      ? pdfText.slice(0, MAX_CHARS) + "\n\n[Note: Document truncated due to size]"
-      : pdfText;
-
     const payload = {
       systemInstruction: {
-        parts: [{ text: "You are an expert real estate analyst. Analyze this disclosure document and provide a JSON response with summary and components array. Each component should have componentName, analysis, riskScore (Low/Medium/High/Unknown), estimatedCost (string), and sourcePage (number)." }]
+        parts: [{ text: "You are an expert real estate analyst. Analyze the attached disclosure PDF and provide a JSON response with summary and components array. Each component should have componentName, analysis, riskScore (Low/Medium/High/Unknown), estimatedCost (string), and sourcePage (number)." }]
       },
       contents: [{
-        parts: [{ text: `Analyze this real estate disclosure:\n\n${analysisText}` }]
+        parts: [
+          { text: "Analyze this original real estate disclosure PDF. Extract content as needed. Return strictly the requested JSON." },
+          { inline_data: { mime_type: mimeType, data: base64Data } }
+        ]
       }],
       generationConfig: {
         responseMimeType: "application/json",

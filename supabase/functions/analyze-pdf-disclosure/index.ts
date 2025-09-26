@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.0';
+import { encode as base64Encode } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,8 +9,10 @@ const corsHeaders = {
 };
 
 interface AnalysisRequest {
-  pdfText: string;
   reportId: string;
+  pdfText?: string;
+  bucket?: string;
+  filePath?: string;
 }
 
 interface AnalysisComponent {
@@ -33,23 +36,40 @@ serve(async (req) => {
 
   let reportId: string | undefined;
   try {
-    const body = await req.json();
-    const { pdfText, reportId: requestReportId } = body;
+    const body: AnalysisRequest = await req.json();
+    const { reportId: requestReportId, bucket, filePath, pdfText } = body;
     reportId = requestReportId;
-    
+
     console.log('Starting PDF analysis for report:', reportId);
-    console.log('PDF text provided:', !!pdfText);
-    console.log('PDF text length:', pdfText?.length || 0);
-    
+
     if (!reportId || typeof reportId !== 'string') {
       throw new Error('No valid report ID provided');
     }
-    
-    if (!pdfText || typeof pdfText !== 'string') {
-      throw new Error('No valid PDF text provided');
+
+    // Preferred path: use the original PDF from storage (no preprocessing)
+    if (bucket && filePath) {
+      console.log(`Fetching original PDF from storage bucket=${bucket}, path=${filePath}`);
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+      const { data: fileBlob, error: downloadError } = await supabase.storage.from(bucket).download(filePath);
+      if (downloadError || !fileBlob) {
+        throw new Error(`Failed to download PDF from storage: ${downloadError?.message || 'unknown error'}`);
+      }
+      const arrayBuf = await fileBlob.arrayBuffer();
+      const base64Data = base64Encode(new Uint8Array(arrayBuf));
+      console.log('Using original PDF via inline_data for Gemini analysis');
+      return await processPdfAnalysisWithFile(base64Data, 'application/pdf', reportId);
     }
-    
-    // Check if PDF text is too large (approximate token limit)
+
+    // Fallback: legacy text-based analysis (not recommended)
+    if (!pdfText || typeof pdfText !== 'string') {
+      throw new Error('No valid PDF provided. Expected storage reference (bucket/filePath) or pdfText.');
+    }
+
+    console.log('Warning: Falling back to text-based analysis (pdfText provided)');
+
     if (pdfText.length > 800000) { // ~200k tokens
       console.log('PDF text too large, truncating...');
       const truncatedText = pdfText.substring(0, 800000) + "\n\n[Note: Document was truncated due to size limitations]";
@@ -252,5 +272,132 @@ Return the result in the specified JSON format.`;
       }
     }
 
-    throw new Error('Failed to get response from Gemini API after retries');
+  throw new Error('Failed to get response from Gemini API after retries');
+}
+
+// Analyze using original PDF via inline_data (preferred)
+async function processPdfAnalysisWithFile(base64Data: string, mimeType: string, reportId: string) {
+  if (!base64Data || !reportId) {
+    throw new Error('Missing required fields: base64Data and reportId');
+  }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+  await supabase
+    .from('disclosure_reports')
+    .update({ status: 'processing' })
+    .eq('id', reportId);
+
+  const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+  if (!geminiApiKey) throw new Error('GEMINI_API_KEY not configured');
+
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${geminiApiKey}`;
+
+  const payload = {
+    systemInstruction: {
+      parts: [{ text: "You are an expert real estate analyst. Analyze the attached disclosure PDF and provide a JSON response with summary and components array. Each component should have componentName, analysis, riskScore (Low/Medium/High/Unknown), estimatedCost (string), and sourcePage (number)." }]
+    },
+    contents: [{
+      parts: [
+        { text: "Analyze this original real estate disclosure PDF. Extract content as needed. Return strictly the requested JSON." },
+        { inline_data: { mime_type: mimeType, data: base64Data } }
+      ]
+    }],
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: "OBJECT",
+        properties: {
+          summary: { type: "STRING" },
+          components: {
+            type: "ARRAY",
+            items: {
+              type: "OBJECT",
+              properties: {
+                componentName: { type: "STRING" },
+                analysis: { type: "STRING" },
+                riskScore: { type: "STRING", enum: ["Low", "Medium", "High", "Unknown"] },
+                estimatedCost: { type: "STRING" },
+                sourcePage: { type: "NUMBER" }
+              },
+              required: ["componentName", "analysis", "riskScore", "estimatedCost", "sourcePage"]
+            }
+          }
+        },
+        required: ["summary", "components"]
+      }
+    }
+  };
+
+  console.log('Calling Gemini API with original PDF...');
+
+  let response;
+  let retries = 3;
+  let delay = 1000;
+  while (retries > 0) {
+    try {
+      response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!jsonText) throw new Error('No response from Gemini API');
+        const analysisResult: AnalysisResult = JSON.parse(jsonText);
+
+        const riskCounts = { Low: 0, Medium: 0, High: 0, Unknown: 0 } as const;
+        (analysisResult.components || []).forEach((comp: any) => {
+          // @ts-ignore
+          riskCounts[comp.riskScore as keyof typeof riskCounts]++;
+        });
+
+        let overallRiskScore = 1;
+        if (riskCounts.High > 0) overallRiskScore = Math.min(10, 5 + riskCounts.High * 2);
+        else if (riskCounts.Medium > 0) overallRiskScore = Math.min(7, 3 + riskCounts.Medium);
+        else if (riskCounts.Low > 0) overallRiskScore = Math.min(4, 1 + riskCounts.Low * 0.5);
+
+        const { error: updateError } = await supabase
+          .from('disclosure_reports')
+          .update({
+            status: 'complete',
+            risk_score: overallRiskScore,
+            report_summary_basic: analysisResult.summary,
+            report_summary_full: JSON.stringify({
+              summary: analysisResult.summary,
+              findings: analysisResult.components,
+              total_components: (analysisResult.components || []).length,
+              risk_breakdown: riskCounts
+            }),
+            dummy_analysis_complete: true
+          })
+          .eq('id', reportId);
+
+        if (updateError) throw updateError;
+
+        return new Response(JSON.stringify({
+          success: true,
+          reportId,
+          summary: analysisResult.summary
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      } else if (response.status === 429 || response.status >= 500) {
+        await new Promise(res => setTimeout(res, delay));
+        delay *= 2;
+        retries--;
+      } else {
+        throw new Error(`Gemini API request failed with status: ${response.status}`);
+      }
+    } catch (e) {
+      if (retries === 1) throw e;
+      await new Promise(res => setTimeout(res, delay));
+      delay *= 2;
+      retries--;
+    }
+  }
+
+  throw new Error('Failed to get response from Gemini API after retries');
 }
