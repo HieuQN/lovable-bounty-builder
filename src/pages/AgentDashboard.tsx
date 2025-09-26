@@ -10,7 +10,7 @@ import AgentSettings from '@/components/AgentSettings';
 
 const AgentDashboardNew = () => {
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState('bounties');
+  const [activeTab, setActiveTab] = useState('activities');
   const [selectedShowingId, setSelectedShowingId] = useState<string | null>(null);
 
   // Handle navigation state from notifications and URL parameters
@@ -43,7 +43,7 @@ const AgentDashboardNew = () => {
 
   const renderTabContent = () => {
     switch (activeTab) {
-      case 'bounties':
+      case 'activities':
       case 'disclosures':
         return <AgentDashboard activeTab={activeTab} />;
       case 'showing-requests':

@@ -46,7 +46,7 @@ const DashboardSidebar = ({ userType, activeTab, onTabChange }: DashboardSidebar
   ];
 
   const agentTabs = [
-    { id: 'bounties', label: 'Available Bounties', icon: Coins },
+    { id: 'activities', label: 'Available Activities', icon: Coins },
     { id: 'disclosures', label: 'My Disclosures', icon: Upload },
     { id: 'showing-requests', label: 'Showing Requests', icon: Calendar },
     { id: 'upcoming-showings', label: 'Upcoming Showings', icon: Calendar },
@@ -99,7 +99,7 @@ const DashboardSidebar = ({ userType, activeTab, onTabChange }: DashboardSidebar
           // Get count for each tab
           const getTabCount = () => {
             if (userType === 'agent') {
-              if (tab.id === 'bounties') return availableBountiesCount;
+              if (tab.id === 'activities') return availableBountiesCount;
               if (tab.id === 'showing-requests') return showingRequestsCount;
             }
             if (tab.id === 'messages') return unreadCount;

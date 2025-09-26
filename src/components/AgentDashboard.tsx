@@ -8,12 +8,12 @@ import { toast } from '@/components/ui/use-toast';
 import { Upload, Coins, FileText, Star, Building, Clock } from 'lucide-react';
 import { UploadDisclosureModal } from './UploadDisclosureModal';
 
-interface Bounty {
+interface Activity {
   id: string;
   property_id: string;
   status: string;
   created_at: string;
-  claim_expiration?: string;
+  expiration?: string;
   properties?: {
     full_address: string;
     city: string;
@@ -45,13 +45,13 @@ interface AgentDashboardProps {
   activeTab?: string;
 }
 
-const AgentDashboard = ({ activeTab = 'bounties' }: AgentDashboardProps) => {
-  const [bounties, setBounties] = useState<Bounty[]>([]);
+const AgentDashboard = ({ activeTab = 'activities' }: AgentDashboardProps) => {
+  const [activities, setActivities] = useState<Activity[]>([]);
   const [myDisclosures, setMyDisclosures] = useState<MyDisclosure[]>([]);
   const [myReports, setMyReports] = useState<any[]>([]);
   const [agentProfile, setAgentProfile] = useState<AgentProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedBounty, setSelectedBounty] = useState<string | null>(null);
+  const [selectedActivity, setSelectedActivity] = useState<string | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
 
   useEffect(() => {
@@ -72,31 +72,31 @@ const AgentDashboard = ({ activeTab = 'bounties' }: AgentDashboardProps) => {
 
       if (profileError && profileError.code !== 'PGRST116') throw profileError;
 
-      // Use the new function that automatically resets expired claims
-      const { data: allBounties, error: bountiesError } = await supabase
+      // Use the new function that automatically resets expired activities
+      const { data: allActivities, error: activitiesError } = await supabase
         .rpc('get_available_bounties_with_reset');
 
-      if (bountiesError) throw bountiesError;
+      if (activitiesError) throw activitiesError;
 
-      // Fetch property details for each bounty
-      const bountiesWithProperties = await Promise.all(
-        (allBounties || []).map(async (bounty) => {
+      // Fetch property details for each activity
+      const activitiesWithProperties = await Promise.all(
+        (allActivities || []).map(async (activity) => {
           const { data: property, error: propertyError } = await supabase
             .from('properties')
             .select('full_address, city, state')
-            .eq('id', bounty.property_id)
+            .eq('id', activity.property_id)
             .single();
 
           if (propertyError) {
             console.error('Error fetching property:', propertyError);
-            return { ...bounty, properties: null };
+            return { ...activity, properties: null, expiration: activity.claim_expiration };
           }
 
-          return { ...bounty, properties: property };
+          return { ...activity, properties: property, expiration: activity.claim_expiration };
         })
       );
 
-      const bountiesData = bountiesWithProperties;
+      const activitiesData = activitiesWithProperties;
 
       // Fetch agent's disclosure reports
       let disclosuresData = [];
@@ -119,7 +119,7 @@ const AgentDashboard = ({ activeTab = 'bounties' }: AgentDashboardProps) => {
       }
 
       setAgentProfile(profile);
-      setBounties(bountiesData || []);
+      setActivities(activitiesData || []);
       setMyDisclosures(disclosuresData);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -133,7 +133,7 @@ const AgentDashboard = ({ activeTab = 'bounties' }: AgentDashboardProps) => {
     }
   };
 
-  const claimBounty = async (bountyId: string) => {
+  const acceptActivity = async (activityId: string) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user || !agentProfile) return;
@@ -145,21 +145,21 @@ const AgentDashboard = ({ activeTab = 'bounties' }: AgentDashboardProps) => {
           claimed_by_agent_id: agentProfile.id,
           claim_expiration: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
         })
-        .eq('id', bountyId);
+        .eq('id', activityId);
 
       if (error) throw error;
 
       toast({
-        title: "Bounty Claimed",
-        description: "You have 24 hours to upload the disclosure",
+        title: "Activity Accepted",
+        description: "You have 24 hours to submit the disclosure document",
       });
 
       fetchData();
     } catch (error) {
-      console.error('Error claiming bounty:', error);
+      console.error('Error accepting activity:', error);
       toast({
         title: "Error",
-        description: "Failed to claim bounty",
+        description: "Failed to accept activity",
         variant: "destructive",
       });
     }
@@ -167,7 +167,7 @@ const AgentDashboard = ({ activeTab = 'bounties' }: AgentDashboardProps) => {
 
   const handleUploadSuccess = () => {
     setShowUploadModal(false);
-    setSelectedBounty(null);
+    setSelectedActivity(null);
     fetchData();
     toast({
       title: "Success",
@@ -206,7 +206,7 @@ const AgentDashboard = ({ activeTab = 'bounties' }: AgentDashboardProps) => {
           <div>
             <h1 className="text-3xl font-bold mb-2">Agent Dashboard</h1>
             <p className="text-muted-foreground">
-              Manage bounties and track your disclosure uploads
+              Manage disclosure activities and track your submissions
             </p>
           </div>
           
@@ -255,72 +255,88 @@ const AgentDashboard = ({ activeTab = 'bounties' }: AgentDashboardProps) => {
         )}
       </div>
 
-      {activeTab === 'bounties' && (
+      {activeTab === 'activities' && (
         <div className="space-y-6">
           <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold">Available Bounties</h2>
-            <Badge variant="secondary">{bounties.length} Bounties</Badge>
+            <h2 className="text-2xl font-bold">Available Activities</h2>
+            <Badge variant="secondary">{activities.length} Activities</Badge>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {bounties.length === 0 ? (
+            {activities.length === 0 ? (
               <Card className="col-span-full">
                 <CardContent className="pt-6">
                   <div className="text-center py-8">
                     <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">No bounties available</h3>
+                    <h3 className="text-lg font-semibold mb-2">No activities available</h3>
                     <p className="text-muted-foreground">Check back later for new opportunities</p>
                   </div>
                 </CardContent>
               </Card>
             ) : (
-              bounties.map((bounty) => (
-                <Card key={bounty.id} className="hover:shadow-lg transition-shadow">
+              activities.map((activity) => (
+                <Card key={activity.id} className="hover:shadow-lg transition-shadow">
                   <CardHeader>
                     <div className="flex justify-between items-start">
                       <div>
                         <CardTitle className="text-lg mb-1">
-                          {bounty.properties?.full_address || 'Property Address'}
+                          {activity.properties?.full_address || 'Property Address'}
                         </CardTitle>
                         <CardDescription>
-                          {bounty.properties?.city}, {bounty.properties?.state}
+                          {activity.properties?.city}, {activity.properties?.state}
                         </CardDescription>
                       </div>
-                      <Badge variant={bounty.status === 'open' ? 'default' : 'secondary'}>
-                        {bounty.status}
+                      <Badge variant={activity.status === 'open' ? 'default' : 'secondary'}>
+                        {activity.status}
                       </Badge>
                     </div>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
                       <div className="text-sm text-muted-foreground">
-                        Posted: {new Date(bounty.created_at).toLocaleDateString()}
+                        Posted: {new Date(activity.created_at).toLocaleString('en-US', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit',
+                          timeZoneName: 'short'
+                        })}
                       </div>
-                      {bounty.claim_expiration && (
+                      {activity.expiration && (
                         <div className="text-sm text-orange-600 flex items-center gap-1">
                           <Clock className="w-3 h-3" />
-                          Expires: {new Date(bounty.claim_expiration).toLocaleDateString()}
+                          Deadline: {new Date(activity.expiration).toLocaleString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                            timeZoneName: 'short'
+                          })}
                         </div>
                       )}
                       <div className="flex gap-2">
-                        {bounty.status === 'open' ? (
+                        {activity.status === 'open' ? (
                           <Button 
-                            onClick={() => claimBounty(bounty.id)}
+                            onClick={() => acceptActivity(activity.id)}
                             className="flex-1"
                             size="sm"
                           >
-                            Claim Bounty
+                            Accept Activity
                           </Button>
                         ) : (
                           <Button 
                             onClick={() => {
-                              setSelectedBounty(bounty.id);
+                              setSelectedActivity(activity.id);
                               setShowUploadModal(true);
                             }}
                             className="flex-1"
                             size="sm"
                           >
                             <Upload className="w-4 h-4 mr-2" />
-                            Upload
+                            Submit Disclosure
                           </Button>
                         )}
                       </div>
@@ -347,7 +363,7 @@ const AgentDashboard = ({ activeTab = 'bounties' }: AgentDashboardProps) => {
                   <div className="text-center py-8">
                     <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                     <h3 className="text-lg font-semibold mb-2">No disclosures uploaded</h3>
-                    <p className="text-muted-foreground">Start by claiming and fulfilling bounties</p>
+                    <p className="text-muted-foreground">Start by accepting and fulfilling activities</p>
                   </div>
                 </CardContent>
               </Card>
@@ -375,7 +391,15 @@ const AgentDashboard = ({ activeTab = 'bounties' }: AgentDashboardProps) => {
                         {disclosure.report_summary_basic || 'Disclosure analysis in progress'}
                       </p>
                       <div className="text-sm text-muted-foreground">
-                        Uploaded: {new Date(disclosure.created_at).toLocaleDateString()}
+                        Uploaded: {new Date(disclosure.created_at).toLocaleString('en-US', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit',
+                          timeZoneName: 'short'
+                        })}
                       </div>
                       {disclosure.status === 'complete' && (
                         <Button 
@@ -396,14 +420,14 @@ const AgentDashboard = ({ activeTab = 'bounties' }: AgentDashboardProps) => {
         </div>
       )}
 
-      {showUploadModal && selectedBounty && (
+      {showUploadModal && selectedActivity && (
         <UploadDisclosureModal
           isOpen={showUploadModal}
           onClose={() => {
             setShowUploadModal(false);
-            setSelectedBounty(null);
+            setSelectedActivity(null);
           }}
-          bountyId={selectedBounty}
+          bountyId={selectedActivity}
           onSuccess={handleUploadSuccess}
         />
       )}

@@ -117,8 +117,8 @@ const Home = () => {
         propertyId = newProperty.id;
       }
 
-      // Create disclosure bounty
-      const { error: bountyError } = await supabase
+      // Create disclosure activity
+      const { error: activityError } = await supabase
         .from('disclosure_bounties')
         .insert({
           property_id: propertyId,
@@ -126,8 +126,8 @@ const Home = () => {
           status: 'open'
         });
 
-      if (bountyError) {
-        console.error('Error creating bounty:', bountyError);
+      if (activityError) {
+        console.error('Error creating activity:', activityError);
       }
 
       navigate(`/analyze/${propertyId}`);
@@ -153,18 +153,18 @@ const Home = () => {
           <div className="text-center max-w-4xl mx-auto">
             <Badge variant="secondary" className="mb-6 px-4 py-2">
               <Star className="w-4 h-4 mr-2" />
-              AI-Powered Property Intelligence
+              AI-Powered Real Estate Intelligence
             </Badge>
             <h1 className="text-5xl md:text-7xl font-bold mb-8 leading-tight">
-              Smart Property{" "}
+              Unlock Property{" "}
               <span className="bg-gradient-to-r from-primary to-primary-hover bg-clip-text text-transparent">
-                Disclosure
+                Intelligence
               </span>{" "}
-              Analysis
+              with AI
             </h1>
             <p className="text-xl text-muted-foreground mb-12 leading-relaxed max-w-3xl mx-auto">
-              Get instant AI analysis of property disclosure reports. Uncover potential issues, 
-              estimate costs, and gain negotiation advantages before you buy.
+              Transform property disclosures into actionable insights. Our AI analyzes documents in seconds, 
+              revealing hidden risks, repair costs, and negotiation opportunities that could save you thousands.
             </p>
             
             {/* Address Input */}
@@ -229,10 +229,10 @@ const Home = () => {
         <section className="container mx-auto px-4 py-20">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
-              Why Choose IntelleHouse?
+              Why Real Estate Professionals Choose IntelleHouse
             </h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Our AI-powered platform gives you the insights you need to make confident property decisions
+              Advanced AI technology meets real estate expertise to deliver unparalleled property insights
             </p>
           </div>
           
@@ -242,9 +242,9 @@ const Home = () => {
                 <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-primary/20 to-primary/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
                   <Shield className="w-8 h-8 text-primary" />
                 </div>
-                <CardTitle className="text-xl mb-2">Risk Assessment</CardTitle>
+                <CardTitle className="text-xl mb-2">Comprehensive Risk Analysis</CardTitle>
                 <CardDescription className="text-base leading-relaxed">
-                  AI-powered analysis identifies potential issues in foundation, electrical, plumbing, and structural systems
+                  Advanced AI identifies critical issues across foundation, electrical, plumbing, HVAC, and structural systems with precise risk scoring
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -254,9 +254,9 @@ const Home = () => {
                 <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-primary/20 to-primary/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
                   <TrendingUp className="w-8 h-8 text-primary" />
                 </div>
-                <CardTitle className="text-xl mb-2">Cost Estimates</CardTitle>
+                <CardTitle className="text-xl mb-2">Accurate Cost Projections</CardTitle>
                 <CardDescription className="text-base leading-relaxed">
-                  Get realistic repair cost ranges and budget planning to factor into your negotiation strategy
+                  Get market-calibrated repair estimates and budget forecasts to strengthen your negotiation position and investment decisions
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -266,13 +266,13 @@ const Home = () => {
                 <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-primary/20 to-primary/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
                   <Users className="w-8 h-8 text-primary" />
                 </div>
-                <CardTitle className="text-xl mb-2">Agent Network</CardTitle>
+                <CardTitle className="text-xl mb-2">Professional Network</CardTitle>
                 <CardDescription className="text-base leading-relaxed">
-                  Licensed real estate agents upload disclosures and earn credits for verified reports
+                  Licensed real estate agents contribute disclosure documents and earn rewards for verified submissions
                   <br />
                   <Button variant="link" className="p-0 h-auto text-primary font-semibold mt-2" asChild>
                     <a href="/auth">
-                      Agent Login <ArrowRight className="w-4 h-4 ml-1" />
+                      Join Our Network <ArrowRight className="w-4 h-4 ml-1" />
                     </a>
                   </Button>
                 </CardDescription>
