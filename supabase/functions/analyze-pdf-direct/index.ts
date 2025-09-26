@@ -50,12 +50,17 @@ serve(async (req) => {
 
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${geminiApiKey}`;
     
+    const MAX_CHARS = 200000;
+    const analysisText = pdfText.length > MAX_CHARS
+      ? pdfText.slice(0, MAX_CHARS) + "\n\n[Note: Document truncated due to size]"
+      : pdfText;
+
     const payload = {
       systemInstruction: {
         parts: [{ text: "You are an expert real estate analyst. Analyze this disclosure document and provide a JSON response with summary and components array. Each component should have componentName, analysis, riskScore (Low/Medium/High/Unknown), estimatedCost (string), and sourcePage (number)." }]
       },
       contents: [{
-        parts: [{ text: `Analyze this real estate disclosure:\n\n${pdfText}` }]
+        parts: [{ text: `Analyze this real estate disclosure:\n\n${analysisText}` }]
       }],
       generationConfig: {
         responseMimeType: "application/json",
@@ -90,7 +95,39 @@ serve(async (req) => {
     });
 
     if (!response.ok) {
-      throw new Error(`Gemini API failed: ${response.status} ${await response.text()}`);
+      const errorText = await response.text();
+      if (response.status === 429) {
+        let retryAfterSeconds: number | undefined;
+        try {
+          const errJson = JSON.parse(errorText);
+          const retryInfo = errJson?.error?.details?.find((d: any) => d?.['@type']?.includes('RetryInfo'));
+          const retryStr: string | undefined = retryInfo?.retryDelay;
+          const m = retryStr?.match(/(\d+)/);
+          if (m) retryAfterSeconds = parseInt(m[1], 10);
+        } catch {}
+        // Mark report as failed due to rate limit
+        await supabase
+          .from('disclosure_reports')
+          .update({ status: 'failed' })
+          .eq('id', reportId);
+        // Log error context
+        await supabase.from('analysis_logs').insert({
+          report_id: reportId,
+          function_name: 'analyze-pdf-direct',
+          level: 'error',
+          message: 'Gemini API rate limited',
+          context: { error: errorText, retryAfterSeconds }
+        });
+        return new Response(
+          JSON.stringify({
+            error: 'rate_limited',
+            message: 'Gemini API quota exceeded. Please retry later.',
+            retryAfterSeconds,
+          }),
+          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      throw new Error(`Gemini API failed: ${response.status} ${errorText}`);
     }
 
     const result = await response.json();
