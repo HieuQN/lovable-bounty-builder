@@ -34,8 +34,8 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
         setError('Please select a PDF file');
         return;
       }
-      if (selectedFile.size > 200 * 1024 * 1024) { // 200MB limit (direct Gemini processing)
-        setError('File size must be less than 200MB');
+      if (selectedFile.size > 100 * 1024 * 1024) { // 100MB limit (we'll chunk it)
+        setError('File size must be less than 100MB');
         return;
       }
       setFile(selectedFile);
@@ -44,6 +44,23 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
     }
   };
 
+  const splitPDFIntoChunks = async (file: File, chunkSizeMB: number = 18): Promise<File[]> => {
+    const chunkSize = chunkSizeMB * 1024 * 1024; // Convert to bytes
+    const chunks: File[] = [];
+    
+    for (let start = 0; start < file.size; start += chunkSize) {
+      const end = Math.min(start + chunkSize, file.size);
+      const chunkBlob = file.slice(start, end);
+      const chunkIndex = Math.floor(start / chunkSize) + 1;
+      const chunkFile = new File([chunkBlob], `${file.name}_chunk_${chunkIndex}`, {
+        type: file.type
+      });
+      chunks.push(chunkFile);
+    }
+    
+    console.log(`Split PDF into ${chunks.length} chunks`);
+    return chunks;
+  };
 
   const handleUpload = useCallback(async () => {
     if (!file) {
@@ -80,82 +97,112 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
       const timestamp = new Date().getTime();
       const fileExtension = file.name.split('.').pop();
 
-      setProcessingProgress(10);
-
-      // PARALLEL PROCESSING: Upload to storage (for record keeping) AND direct Gemini analysis
-      const promises = [];
-
-      // 1. Upload to Supabase Storage for record keeping
-      const filePath = `${user.id}/${timestamp}-${reportId}.${fileExtension}`;
-      const storageUpload = supabase.storage
-        .from('disclosure-uploads')
-        .upload(filePath, file);
-      promises.push(storageUpload);
-
-      // 2. Convert PDF to base64 for direct Gemini API call
-      const fileReader = new FileReader();
-      const base64Promise = new Promise<string>((resolve, reject) => {
-        fileReader.onload = () => {
-          const result = fileReader.result as string;
-          // Remove data:application/pdf;base64, prefix
-          const base64 = result.split(',')[1];
-          resolve(base64);
-        };
-        fileReader.onerror = reject;
-        fileReader.readAsDataURL(file);
-      });
-      promises.push(base64Promise);
-
-      setProcessingProgress(25);
-
-      // Wait for both storage upload and base64 conversion
-      const [storageResult, pdfBase64] = await Promise.all(promises);
-
-      if (storageResult.error) {
-        console.warn('Storage upload failed (proceeding with analysis):', storageResult.error.message);
-      } else {
-        console.log('Successfully uploaded to storage for record keeping');
-      }
-
-      setProcessingProgress(40);
-
-      // Direct Gemini API analysis (no 20MB limit)
-      console.log(`Starting direct Gemini analysis for PDF (${(file.size / (1024 * 1024)).toFixed(2)}MB)`);
-      console.log('Calling gemini-direct-analysis function with reportId:', reportId);
+      // Check if file needs to be chunked (over 20MB)
+      const fileSizeMB = file.size / (1024 * 1024);
       
-      const { data: analysisResult, error: analysisError } = await supabase.functions.invoke(
-        'gemini-direct-analysis',
-        {
-          body: { 
-            reportId: reportId,
-            pdfBase64: pdfBase64,
-            fileName: file.name
+      if (fileSizeMB > 20) {
+        console.log(`Large PDF detected (${fileSizeMB.toFixed(2)}MB), splitting into chunks...`);
+        
+        // Split PDF into chunks
+        const chunks = await splitPDFIntoChunks(file, 18); // Use 18MB chunks for safety
+        const chunkResults: any[] = [];
+
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+          const chunkPath = `${user.id}/${timestamp}-${reportId}_chunk_${i + 1}.${fileExtension}`;
+          
+          setProcessingProgress(((i + 1) / chunks.length) * 50); // First 50% for upload
+          
+          // Upload chunk to storage
+          const { error: uploadError } = await supabase.storage
+            .from('disclosure-uploads')
+            .upload(chunkPath, chunk);
+
+          if (uploadError) {
+            throw new Error(`Chunk upload failed: ${uploadError.message}`);
           }
+
+          // Analyze chunk
+          const { data: chunkResult, error: analysisError } = await supabase.functions.invoke(
+            'analyze-pdf-disclosure',
+            {
+              body: { 
+                reportId: reportId,
+                bucket: 'disclosure-uploads',
+                filePath: chunkPath,
+                fileName: `${file.name} (chunk ${i + 1}/${chunks.length})`
+              }
+            }
+          );
+
+          if (analysisError) {
+            console.error(`Chunk ${i + 1} analysis failed:`, analysisError);
+            // Continue with other chunks
+          } else {
+            chunkResults.push(chunkResult);
+          }
+          
+          setProcessingProgress(50 + ((i + 1) / chunks.length) * 50); // Last 50% for analysis
         }
-      );
 
-      console.log('Analysis function response:', { analysisResult, analysisError });
+        toast({
+          title: "Analysis Complete",
+          description: `Successfully processed ${chunkResults.length}/${chunks.length} chunks of your PDF.`,
+        });
 
-      setProcessingProgress(100);
+        onAnalysisComplete({
+          success: true,
+          message: `Analysis completed for ${chunkResults.length}/${chunks.length} chunks`,
+          result: { chunks: chunkResults, totalChunks: chunks.length }
+        });
 
-      if (analysisError) {
-        throw new Error(`Direct analysis failed: ${analysisError.message}`);
+      } else {
+        // Single file processing (under 20MB)
+        const filePath = `${user.id}/${timestamp}-${reportId}.${fileExtension}`;
+
+        setProcessingProgress(25);
+
+        // Upload file to storage
+        const { error: uploadError } = await supabase.storage
+          .from('disclosure-uploads')
+          .upload(filePath, file);
+
+        if (uploadError) {
+          throw new Error(`Upload failed: ${uploadError.message}`);
+        }
+
+        setProcessingProgress(50);
+
+        // Start analysis
+        const { data: analysisResult, error: analysisError } = await supabase.functions.invoke(
+          'analyze-pdf-disclosure',
+          {
+            body: { 
+              reportId: reportId,
+              bucket: 'disclosure-uploads',
+              filePath: filePath,
+              fileName: file.name
+            }
+          }
+        );
+
+        setProcessingProgress(100);
+
+        if (analysisError) {
+          throw new Error(`Analysis failed: ${analysisError.message}`);
+        }
+
+        toast({
+          title: "Analysis Complete",
+          description: "Your disclosure document has been successfully analyzed!",
+        });
+
+        onAnalysisComplete({
+          success: true,
+          message: 'Analysis completed successfully',
+          result: analysisResult
+        });
       }
-
-      if (!analysisResult.success) {
-        throw new Error(analysisResult.error || 'Analysis completed but returned no results');
-      }
-
-      toast({
-        title: "Analysis Complete",
-        description: "Your disclosure document has been successfully analyzed using direct Gemini processing!",
-      });
-
-      onAnalysisComplete({
-        success: true,
-        message: 'Analysis completed successfully via direct Gemini API',
-        result: analysisResult
-      });
 
     } catch (error) {
       console.error('Analysis error:', error);
@@ -252,7 +299,7 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
                 {file && (
                   <span className="text-xs text-muted-foreground ml-auto">
                     {(file.size / (1024 * 1024)).toFixed(1)}MB
-                    {file.size > 50 * 1024 * 1024 && " (large file - direct Gemini processing)"}
+                    {file.size > 20 * 1024 * 1024 && " (will be chunked)"}
                   </span>
                 )}
               </div>
@@ -291,7 +338,10 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
               <div>
                 <h3 className="text-lg font-semibold">Processing PDF</h3>
                 <p className="text-muted-foreground">
-                  Analyzing your disclosure document directly with Gemini AI...
+                  {file && file.size > 20 * 1024 * 1024 
+                    ? 'Large PDF detected - splitting into chunks for analysis...'
+                    : 'Analyzing your disclosure document...'
+                  }
                 </p>
               </div>
               <div className="w-full max-w-xs">
