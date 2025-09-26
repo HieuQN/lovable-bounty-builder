@@ -86,7 +86,7 @@ serve(async (req) => {
         
         await supabase
           .from('disclosure_reports')
-          .update({ status: 'error' })
+          .update({ status: 'failed' })
           .eq('id', reportId);
         // Persist error log
         await supabase.from('analysis_logs').insert({
@@ -133,7 +133,9 @@ async function processPdfAnalysisFromPDF(pdfBase64: string, reportId: string) {
     throw new Error('GEMINI_API_KEY not configured');
   }
 
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
+  const models = ['gemini-1.5-flash-001', 'gemini-1.5-pro-001', 'gemini-pro'];
+  let apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${models[0]}:generateContent?key=${geminiApiKey}`;
+  let currentModelIndex = 0;
 
   const systemPrompt = `You are an expert real estate analyst. Analyze the provided real estate disclosure PDF and return the same JSON schema as before.`;
 
@@ -179,7 +181,7 @@ async function processPdfAnalysisFromPDF(pdfBase64: string, reportId: string) {
 
   while (retries > 0) {
     try {
-      console.log('Calling Gemini API with inline PDF...');
+      console.log(`Calling Gemini API with inline PDF using model: ${models[currentModelIndex]}...`);
       response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -277,11 +279,23 @@ async function processPdfAnalysisFromPDF(pdfBase64: string, reportId: string) {
         });
       }
 
+      if (response.status === 404 && currentModelIndex < models.length - 1) {
+        // Try next model on 404
+        currentModelIndex++;
+        apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${models[currentModelIndex]}:generateContent?key=${geminiApiKey}`;
+        console.log(`Model not found, trying: ${models[currentModelIndex]}`);
+        continue;
+      }
+      
       if (response.status === 429 || response.status >= 500) {
         await new Promise(r => setTimeout(r, delay));
         delay *= 2; retries--; continue;
       }
-      throw new Error(`Gemini inline request failed: ${response.status}`);
+      
+      // Log error response body for debugging
+      const errorBody = await response.text();
+      console.error(`Gemini API error (${response.status}):`, errorBody);
+      throw new Error(`Gemini inline request failed: ${response.status} - ${errorBody}`);
     } catch (e) {
       if (retries === 1) throw e;
       await new Promise(r => setTimeout(r, delay));
@@ -326,7 +340,9 @@ async function processPdfAnalysis(pdfText: string, reportId: string) {
       throw new Error('GEMINI_API_KEY not configured');
     }
 
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
+    const models = ['gemini-1.5-flash-001', 'gemini-1.5-pro-001', 'gemini-pro'];
+    let apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${models[0]}:generateContent?key=${geminiApiKey}`;
+    let currentModelIndex = 0;
 
     const systemPrompt = `You are an expert real estate analyst. Your task is to analyze the provided real estate disclosure document text, which is formatted with page numbers. 
 1.  Provide a concise overall summary of the property's condition based on the disclosure.
@@ -381,7 +397,7 @@ Return the result in the specified JSON format.`;
     
     while (retries > 0) {
       try {
-        console.log(`Attempt ${4 - retries}, making request to Gemini API...`);
+        console.log(`Attempt ${4 - retries}, making request to Gemini API using model: ${models[currentModelIndex]}...`);
         response = await fetch(apiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -505,12 +521,21 @@ Return the result in the specified JSON format.`;
           } else {
             throw new Error("Invalid response structure from Gemini API.");
           }
+        } else if (response.status === 404 && currentModelIndex < models.length - 1) {
+          // Try next model on 404
+          currentModelIndex++;
+          apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${models[currentModelIndex]}:generateContent?key=${geminiApiKey}`;
+          console.log(`Model not found, trying: ${models[currentModelIndex]}`);
+          continue;
         } else if (response.status === 429 || response.status >= 500) {
           await new Promise(res => setTimeout(res, delay));
           delay *= 2;
           retries--;
         } else {
-          throw new Error(`Gemini API request failed with status: ${response.status}`);
+          // Log error response body for debugging
+          const errorBody = await response.text();
+          console.error(`Gemini API error (${response.status}):`, errorBody);
+          throw new Error(`Gemini API request failed with status: ${response.status} - ${errorBody}`);
         }
       } catch (e) {
         if (retries === 1) throw e;
