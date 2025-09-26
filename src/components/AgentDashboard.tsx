@@ -261,91 +261,76 @@ const AgentDashboard = ({ activeTab = 'activities' }: AgentDashboardProps) => {
             <h2 className="text-2xl font-bold">Available Activities</h2>
             <Badge variant="secondary">{activities.length} Activities</Badge>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {activities.length === 0 ? (
-              <Card className="col-span-full">
-                <CardContent className="pt-6">
-                  <div className="text-center py-8">
-                    <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">No activities available</h3>
-                    <p className="text-muted-foreground">Check back later for new opportunities</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              activities.map((activity) => (
-                <Card key={activity.id} className="hover:shadow-lg transition-shadow">
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="text-lg mb-1">
-                          {activity.properties?.full_address || 'Property Address'}
-                        </CardTitle>
-                        <CardDescription>
-                          {activity.properties?.city}, {activity.properties?.state}
-                        </CardDescription>
-                      </div>
-                      <Badge variant={activity.status === 'open' ? 'default' : 'secondary'}>
-                        {activity.status}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      <div className="text-sm text-muted-foreground">
-                        Posted: {new Date(activity.created_at).toLocaleString('en-US', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          second: '2-digit',
-                          timeZoneName: 'short'
-                        })}
-                      </div>
-                      {activity.expiration && (
-                        <div className="text-sm text-orange-600 flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          Deadline: {new Date(activity.expiration).toLocaleString('en-US', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            second: '2-digit',
-                            timeZoneName: 'short'
-                          })}
+          
+          {activities.length === 0 ? (
+            <Card>
+              <CardContent className="pt-6">
+                <div className="text-center py-8">
+                  <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No activities available</h3>
+                  <p className="text-muted-foreground">Check back later for new opportunities</p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {activities.map((activity) => (
+                <Card key={activity.id} className="hover:shadow-md transition-shadow">
+                  <CardContent className="pt-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h3 className="text-lg font-semibold mb-1">
+                              {activity.properties?.full_address || 'Property Address'}
+                            </h3>
+                            <p className="text-muted-foreground mb-2">
+                              {activity.properties?.city}, {activity.properties?.state}
+                            </p>
+                            <div className="text-sm text-muted-foreground">
+                              Posted: {new Date(activity.created_at).toLocaleString('en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit',
+                                timeZoneName: 'short'
+                              })}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 ml-4">
+                            <Badge variant={activity.status === 'open' ? 'default' : 'secondary'}>
+                              {activity.status}
+                            </Badge>
+                            {activity.status === 'open' ? (
+                              <Button 
+                                onClick={() => acceptActivity(activity.id)}
+                                size="sm"
+                              >
+                                Accept Activity
+                              </Button>
+                            ) : (
+                              <Button 
+                                onClick={() => {
+                                  setSelectedActivity(activity.id);
+                                  setShowUploadModal(true);
+                                }}
+                                size="sm"
+                              >
+                                <Upload className="w-4 h-4 mr-2" />
+                                Submit Disclosure
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                      )}
-                      <div className="flex gap-2">
-                        {activity.status === 'open' ? (
-                          <Button 
-                            onClick={() => acceptActivity(activity.id)}
-                            className="flex-1"
-                            size="sm"
-                          >
-                            Accept Activity
-                          </Button>
-                        ) : (
-                          <Button 
-                            onClick={() => {
-                              setSelectedActivity(activity.id);
-                              setShowUploadModal(true);
-                            }}
-                            className="flex-1"
-                            size="sm"
-                          >
-                            <Upload className="w-4 h-4 mr-2" />
-                            Submit Disclosure
-                          </Button>
-                        )}
                       </div>
                     </div>
                   </CardContent>
                 </Card>
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
