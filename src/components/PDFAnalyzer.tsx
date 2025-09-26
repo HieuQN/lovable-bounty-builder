@@ -4,7 +4,6 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Alert, AlertDescription } from './ui/alert';
-import { Progress } from './ui/progress';
 import { Loader2, Upload, FileText, CheckCircle, Clock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from './ui/use-toast';
@@ -23,7 +22,6 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadJobId, setUploadJobId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [processingProgress, setProcessingProgress] = useState(0);
   const [error, setError] = useState('');
   const [fileName, setFileName] = useState('');
 
@@ -34,32 +32,14 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
         setError('Please select a PDF file');
         return;
       }
-      if (selectedFile.size > 100 * 1024 * 1024) { // 100MB limit (we'll chunk it)
-        setError('File size must be less than 100MB');
+      if (selectedFile.size > 20 * 1024 * 1024) { // 20MB limit
+        setError('File size must be less than 20MB');
         return;
       }
       setFile(selectedFile);
       setFileName(selectedFile.name);
       setError('');
     }
-  };
-
-  const splitPDFIntoChunks = async (file: File, chunkSizeMB: number = 18): Promise<File[]> => {
-    const chunkSize = chunkSizeMB * 1024 * 1024; // Convert to bytes
-    const chunks: File[] = [];
-    
-    for (let start = 0; start < file.size; start += chunkSize) {
-      const end = Math.min(start + chunkSize, file.size);
-      const chunkBlob = file.slice(start, end);
-      const chunkIndex = Math.floor(start / chunkSize) + 1;
-      const chunkFile = new File([chunkBlob], `${file.name}_chunk_${chunkIndex}`, {
-        type: file.type
-      });
-      chunks.push(chunkFile);
-    }
-    
-    console.log(`Split PDF into ${chunks.length} chunks`);
-    return chunks;
   };
 
   const handleUpload = useCallback(async () => {
@@ -69,8 +49,6 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
     }
 
     setIsUploading(true);
-    setIsProcessing(true);
-    setProcessingProgress(0);
     setError('');
 
     try {
@@ -94,128 +72,75 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
         throw new Error('Agent profile not found');
       }
 
+      // Generate unique file path
       const timestamp = new Date().getTime();
       const fileExtension = file.name.split('.').pop();
+      const filePath = `${user.id}/${timestamp}-${reportId}.${fileExtension}`;
 
-      // Check if file needs to be chunked (over 20MB)
-      const fileSizeMB = file.size / (1024 * 1024);
-      
-      if (fileSizeMB > 20) {
-        console.log(`Large PDF detected (${fileSizeMB.toFixed(2)}MB), splitting into chunks...`);
-        
-        // Split PDF into chunks
-        const chunks = await splitPDFIntoChunks(file, 18); // Use 18MB chunks for safety
-        const chunkResults: any[] = [];
+      // Upload file to storage
+      const { error: uploadError } = await supabase.storage
+        .from('disclosure-uploads')
+        .upload(filePath, file);
 
-        for (let i = 0; i < chunks.length; i++) {
-          const chunk = chunks[i];
-          const chunkPath = `${user.id}/${timestamp}-${reportId}_chunk_${i + 1}.${fileExtension}`;
-          
-          setProcessingProgress(((i + 1) / chunks.length) * 50); // First 50% for upload
-          
-          // Upload chunk to storage
-          const { error: uploadError } = await supabase.storage
-            .from('disclosure-uploads')
-            .upload(chunkPath, chunk);
-
-          if (uploadError) {
-            throw new Error(`Chunk upload failed: ${uploadError.message}`);
-          }
-
-          // Analyze chunk
-          const { data: chunkResult, error: analysisError } = await supabase.functions.invoke(
-            'analyze-pdf-disclosure',
-            {
-              body: { 
-                reportId: reportId,
-                bucket: 'disclosure-uploads',
-                filePath: chunkPath,
-                fileName: `${file.name} (chunk ${i + 1}/${chunks.length})`
-              }
-            }
-          );
-
-          if (analysisError) {
-            console.error(`Chunk ${i + 1} analysis failed:`, analysisError);
-            // Continue with other chunks
-          } else {
-            chunkResults.push(chunkResult);
-          }
-          
-          setProcessingProgress(50 + ((i + 1) / chunks.length) * 50); // Last 50% for analysis
-        }
-
-        toast({
-          title: "Analysis Complete",
-          description: `Successfully processed ${chunkResults.length}/${chunks.length} chunks of your PDF.`,
-        });
-
-        onAnalysisComplete({
-          success: true,
-          message: `Analysis completed for ${chunkResults.length}/${chunks.length} chunks`,
-          result: { chunks: chunkResults, totalChunks: chunks.length }
-        });
-
-      } else {
-        // Single file processing (under 20MB)
-        const filePath = `${user.id}/${timestamp}-${reportId}.${fileExtension}`;
-
-        setProcessingProgress(25);
-
-        // Upload file to storage
-        const { error: uploadError } = await supabase.storage
-          .from('disclosure-uploads')
-          .upload(filePath, file);
-
-        if (uploadError) {
-          throw new Error(`Upload failed: ${uploadError.message}`);
-        }
-
-        setProcessingProgress(50);
-
-        // Start analysis
-        const { data: analysisResult, error: analysisError } = await supabase.functions.invoke(
-          'analyze-pdf-disclosure',
-          {
-            body: { 
-              reportId: reportId,
-              bucket: 'disclosure-uploads',
-              filePath: filePath,
-              fileName: file.name
-            }
-          }
-        );
-
-        setProcessingProgress(100);
-
-        if (analysisError) {
-          throw new Error(`Analysis failed: ${analysisError.message}`);
-        }
-
-        toast({
-          title: "Analysis Complete",
-          description: "Your disclosure document has been successfully analyzed!",
-        });
-
-        onAnalysisComplete({
-          success: true,
-          message: 'Analysis completed successfully',
-          result: analysisResult
-        });
+      if (uploadError) {
+        throw new Error(`Upload failed: ${uploadError.message}`);
       }
 
-    } catch (error) {
-      console.error('Analysis error:', error);
-      setError(error instanceof Error ? error.message : 'Analysis failed');
+      // Create upload job record
+      const { data: jobData, error: jobError } = await supabase
+        .from('disclosure_upload_jobs')
+        .insert({
+          bounty_id: reportId,
+          agent_id: agentProfile.id,
+          file_path: filePath,
+          file_name: file.name,
+          status: 'processing'
+        })
+        .select()
+        .single();
+
+      if (jobError) {
+        throw new Error(`Failed to create job: ${jobError.message}`);
+      }
+
+      setUploadJobId(jobData.id);
+      setIsProcessing(true);
+
+      // Start background processing
+      const { error: processError } = await supabase.functions.invoke(
+        'process-background-upload',
+        {
+          body: { jobId: jobData.id }
+        }
+      );
+
+      if (processError) {
+        console.error('Background processing error:', processError);
+        // Don't throw here, as the job might still succeed
+      }
+
       toast({
-        title: "Analysis Failed",
+        title: "Upload Successful",
+        description: "Your file is being processed in the background. You will be notified when complete.",
+      });
+
+      // Notify parent that upload started successfully
+      onAnalysisComplete({
+        success: true,
+        message: 'File uploaded successfully. Processing in background.',
+        jobId: jobData.id
+      });
+
+    } catch (error) {
+      console.error('Upload error:', error);
+      setError(error instanceof Error ? error.message : 'Upload failed');
+      toast({
+        title: "Upload Failed",
         description: error instanceof Error ? error.message : 'Unknown error occurred',
         variant: "destructive",
       });
     } finally {
       setIsUploading(false);
-      setIsProcessing(false);
-      setProcessingProgress(0);
     }
   }, [file, onAnalysisStart, onAnalysisComplete]);
 
@@ -296,12 +221,6 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
               <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
                 <FileText className="w-4 h-4 text-muted-foreground" />
                 <span className="text-sm">{fileName}</span>
-                {file && (
-                  <span className="text-xs text-muted-foreground ml-auto">
-                    {(file.size / (1024 * 1024)).toFixed(1)}MB
-                    {file.size > 20 * 1024 * 1024 && " (will be chunked)"}
-                  </span>
-                )}
               </div>
             )}
 
@@ -319,12 +238,12 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
               {isUploading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Uploading & Analyzing...
+                  Uploading...
                 </>
               ) : (
                 <>
                   <Upload className="w-4 h-4 mr-2" />
-                  Upload and Analyze PDF
+                  Upload and Analyze
                 </>
               )}
             </Button>
@@ -336,20 +255,13 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
                 <Clock className="w-12 h-12 text-primary animate-pulse" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold">Processing PDF</h3>
+                <h3 className="text-lg font-semibold">Processing in Background</h3>
                 <p className="text-muted-foreground">
-                  {file && file.size > 20 * 1024 * 1024 
-                    ? 'Large PDF detected - splitting into chunks for analysis...'
-                    : 'Analyzing your disclosure document...'
-                  }
+                  Your file has been uploaded and is being analyzed by AI. You can safely close this page.
                 </p>
-              </div>
-              <div className="w-full max-w-xs">
-                <div className="flex items-center justify-between text-sm mb-2">
-                  <span>Progress</span>
-                  <span>{Math.round(processingProgress)}%</span>
-                </div>
-                <Progress value={processingProgress} className="w-full" />
+                <p className="text-sm text-muted-foreground mt-2">
+                  You'll receive a notification when the analysis is complete.
+                </p>
               </div>
               <Button
                 variant="outline"
@@ -358,10 +270,9 @@ export const PDFAnalyzer: React.FC<PDFAnalyzerProps> = ({
                   setUploadJobId(null);
                   setFile(null);
                   setFileName('');
-                  setProcessingProgress(0);
                 }}
               >
-                Cancel & Upload Another File
+                Upload Another File
               </Button>
             </div>
           </div>
