@@ -47,6 +47,7 @@ interface AgentDashboardProps {
 
 const AgentDashboard = ({ activeTab = 'activities' }: AgentDashboardProps) => {
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [pastActivities, setPastActivities] = useState<Activity[]>([]);
   const [myDisclosures, setMyDisclosures] = useState<MyDisclosure[]>([]);
   const [myReports, setMyReports] = useState<any[]>([]);
   const [agentProfile, setAgentProfile] = useState<AgentProfile | null>(null);
@@ -119,7 +120,13 @@ const AgentDashboard = ({ activeTab = 'activities' }: AgentDashboardProps) => {
       }
 
       setAgentProfile(profile);
-      setActivities(activitiesData || []);
+      
+      // Filter activities - only show open ones in available, others in past
+      const availableActivities = (activitiesData || []).filter(activity => activity.status === 'open');
+      const pastActivitiesData = (activitiesData || []).filter(activity => activity.status !== 'open');
+      
+      setActivities(availableActivities);
+      setPastActivities(pastActivitiesData);
       setMyDisclosures(disclosuresData);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -259,7 +266,7 @@ const AgentDashboard = ({ activeTab = 'activities' }: AgentDashboardProps) => {
         <div className="space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-bold">Available Activities</h2>
-            <Badge variant="secondary">{activities.length} Activities</Badge>
+            <Badge variant="secondary">{activities.length} Available</Badge>
           </div>
           
           {activities.length === 0 ? (
@@ -300,17 +307,74 @@ const AgentDashboard = ({ activeTab = 'activities' }: AgentDashboardProps) => {
                             </div>
                           </div>
                           <div className="flex items-center gap-3 ml-4">
-                            <Badge variant={activity.status === 'open' ? 'default' : 'secondary'}>
-                              {activity.status}
+                            <Badge variant="default">Available</Badge>
+                            <Button 
+                              onClick={() => acceptActivity(activity.id)}
+                              size="sm"
+                            >
+                              Accept Activity
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'past-activities' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-bold">Past Activities</h2>
+            <Badge variant="secondary">{pastActivities.length} Activities</Badge>
+          </div>
+          
+          {pastActivities.length === 0 ? (
+            <Card>
+              <CardContent className="pt-6">
+                <div className="text-center py-8">
+                  <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No past activities</h3>
+                  <p className="text-muted-foreground">Your claimed and completed activities will appear here</p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {pastActivities.map((activity) => (
+                <Card key={activity.id} className="hover:shadow-md transition-shadow">
+                  <CardContent className="pt-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h3 className="text-lg font-semibold mb-1">
+                              {activity.properties?.full_address || 'Property Address'}
+                            </h3>
+                            <p className="text-muted-foreground mb-2">
+                              {activity.properties?.city}, {activity.properties?.state}
+                            </p>
+                            <div className="text-sm text-muted-foreground">
+                              Posted: {new Date(activity.created_at).toLocaleString('en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit',
+                                timeZoneName: 'short'
+                              })}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 ml-4">
+                            <Badge variant={activity.status === 'claimed' ? 'secondary' : 'outline'}>
+                              {activity.status === 'claimed' ? 'In Progress' : activity.status}
                             </Badge>
-                            {activity.status === 'open' ? (
-                              <Button 
-                                onClick={() => acceptActivity(activity.id)}
-                                size="sm"
-                              >
-                                Accept Activity
-                              </Button>
-                            ) : (
+                            {activity.status === 'claimed' && (
                               <Button 
                                 onClick={() => {
                                   setSelectedActivity(activity.id);

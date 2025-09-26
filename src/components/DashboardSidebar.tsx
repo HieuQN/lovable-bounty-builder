@@ -20,7 +20,8 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
-  Settings
+  Settings,
+  Clock
 } from 'lucide-react';
 
 interface DashboardSidebarProps {
@@ -47,6 +48,7 @@ const DashboardSidebar = ({ userType, activeTab, onTabChange }: DashboardSidebar
 
   const agentTabs = [
     { id: 'activities', label: 'Available Activities', icon: Coins },
+    { id: 'past-activities', label: 'Past Activities', icon: Clock },
     { id: 'disclosures', label: 'My Disclosures', icon: Upload },
     { id: 'showing-requests', label: 'Showing Requests', icon: Calendar },
     { id: 'upcoming-showings', label: 'Upcoming Showings', icon: Calendar },

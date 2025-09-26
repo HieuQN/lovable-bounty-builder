@@ -44,6 +44,7 @@ const AgentDashboardNew = () => {
   const renderTabContent = () => {
     switch (activeTab) {
       case 'activities':
+      case 'past-activities':
       case 'disclosures':
         return <AgentDashboard activeTab={activeTab} />;
       case 'showing-requests':
