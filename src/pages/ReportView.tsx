@@ -53,18 +53,31 @@ const ReportView = () => {
 
   const fetchReport = async () => {
     try {
-      const { data, error } = await supabase
+      const { data: reportRow, error } = await supabase
         .from('disclosure_reports')
-        .select(`
-          *,
-          properties (*)
-        `)
+        .select('*')
         .eq('id', reportId)
         .eq('status', 'complete')
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
-      setReport(data);
+      if (!reportRow) {
+        throw new Error('Report not found');
+      }
+
+      let property: Property | null = null;
+      if ((reportRow as any).property_id) {
+        const { data: prop, error: propError } = await supabase
+          .from('properties')
+          .select('*')
+          .eq('id', (reportRow as any).property_id)
+          .maybeSingle();
+        if (!propError && prop) {
+          property = prop as Property;
+        }
+      }
+
+      setReport({ ...(reportRow as any), properties: property } as any);
     } catch (error) {
       console.error('Error fetching report:', error);
       toast({
