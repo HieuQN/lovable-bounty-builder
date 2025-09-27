@@ -39,17 +39,12 @@ const ReportView = () => {
   const [isShowingModalOpen, setIsShowingModalOpen] = useState(false);
   const { showingStatus, getButtonState } = useShowingStatus(report?.property_id || '');
 
-  useEffect(() => {
-    if (!loading && !user) {
-      navigate('/auth');
-    }
-  }, [user, loading, navigate]);
 
   useEffect(() => {
-    if (reportId && user) {
+    if (reportId) {
       fetchReport();
     }
-  }, [reportId, user]);
+  }, [reportId]);
 
   const fetchReport = async () => {
     try {
