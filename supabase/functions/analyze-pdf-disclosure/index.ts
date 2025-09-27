@@ -1,7 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.0';
-import { encode as base64Encode } from "https://deno.land/std@0.224.0/encoding/base64.ts";
+import { encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -58,7 +58,7 @@ serve(async (req) => {
         throw new Error(`Failed to download PDF from storage: ${downloadError?.message || 'unknown error'}`);
       }
       const arrayBuf = await fileBlob.arrayBuffer();
-      const base64Data = base64Encode(new Uint8Array(arrayBuf));
+      const base64Data = encodeBase64(new Uint8Array(arrayBuf));
       console.log('Using original PDF via inline_data for Gemini analysis');
       return await processPdfAnalysisWithFile(base64Data, 'application/pdf', reportId);
     }

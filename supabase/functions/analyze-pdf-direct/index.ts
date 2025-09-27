@@ -1,7 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.0';
-import { encode as base64Encode } from "https://deno.land/std@0.224.0/encoding/base64.ts";
+import { encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -27,7 +27,7 @@ serve(async (req) => {
     // Read original PDF bytes and prepare for inline upload (no preprocessing)
     const pdfBytes = await pdfFile.arrayBuffer();
     const mimeType = (pdfFile.type || 'application/pdf');
-    const base64Data = base64Encode(new Uint8Array(pdfBytes));
+    const base64Data = encodeBase64(new Uint8Array(pdfBytes));
 
     // Initialize Supabase
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
