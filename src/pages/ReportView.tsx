@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
+
 import { toast } from '@/components/ui/use-toast';
 import { ArrowLeft, AlertTriangle, FileText, DollarSign, Download, Calendar } from 'lucide-react';
 import { ShowingRequestModal } from '@/components/ShowingRequestModal';
@@ -33,7 +33,7 @@ const ReportView = () => {
   const { reportId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, loading } = useAuth();
+  
   const [report, setReport] = useState<DisclosureReport | null>(null);
   const [loadingData, setLoadingData] = useState(true);
   const [isShowingModalOpen, setIsShowingModalOpen] = useState(false);
@@ -52,7 +52,7 @@ const ReportView = () => {
         .from('disclosure_reports')
         .select('*')
         .eq('id', reportId)
-        .eq('status', 'complete')
+        
         .maybeSingle();
 
       if (error) throw error;
@@ -80,7 +80,7 @@ const ReportView = () => {
         description: "Failed to load report",
         variant: "destructive",
       });
-      navigate('/dashboard');
+      
     } finally {
       setLoadingData(false);
     }
@@ -171,7 +171,7 @@ const ReportView = () => {
     return [<li key="basic" className="text-sm">{summary}</li>];
   };
 
-  if (loading || loadingData) {
+  if (loadingData) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
