@@ -222,7 +222,7 @@ const ReportView = () => {
 
           <div className="mb-8">
             <h1 className="text-3xl font-bold mb-2">Property Analysis Report</h1>
-            <p className="text-xl text-muted-foreground">{report.properties.full_address}</p>
+            <p className="text-xl text-muted-foreground">{report.properties?.full_address ?? 'Address unavailable'}</p>
             <p className="text-sm text-muted-foreground">
               Purchased on {new Date(report.created_at).toLocaleDateString()}
             </p>
@@ -327,9 +327,9 @@ const ReportView = () => {
           onClose={() => setIsShowingModalOpen(false)}
           property={{
             id: report.property_id,
-            full_address: report.properties.full_address,
-            city: report.properties.city,
-            state: report.properties.state
+            full_address: report.properties?.full_address ?? '',
+            city: report.properties?.city ?? '',
+            state: report.properties?.state ?? ''
           }}
           userCredits={100}
           onRequestSuccess={() => {
