@@ -30,10 +30,17 @@ export const ShowingStatusButton = ({ propertyId, onRequestShowing }: ShowingSta
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user) {
-      fetchShowingRequest();
-      subscribeToUpdates();
+    if (!user) {
+      setLoading(false);
+      return;
     }
+    
+    fetchShowingRequest();
+    const unsubscribe = subscribeToUpdates();
+    
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [user, propertyId]);
 
   const fetchShowingRequest = async () => {

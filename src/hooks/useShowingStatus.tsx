@@ -18,10 +18,17 @@ export const useShowingStatus = (propertyId: string) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user && propertyId) {
-      fetchShowingStatus();
-      setupRealtimeSubscription();
+    if (!user || !propertyId) {
+      setLoading(false);
+      return;
     }
+    
+    fetchShowingStatus();
+    const unsubscribe = setupRealtimeSubscription();
+    
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [user, propertyId]);
 
   const fetchShowingStatus = async () => {

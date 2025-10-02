@@ -47,18 +47,41 @@ const ReportView = () => {
   }, [reportId]);
 
   const fetchReport = async () => {
+    console.log('[ReportView] Fetching report:', reportId);
+    
+    const fetchTimeout = setTimeout(() => {
+      console.error('[ReportView] Fetch timeout after 10s');
+      setLoadingData(false);
+      toast({
+        title: "Request Timeout",
+        description: "The request took too long. Please try again.",
+        variant: "destructive",
+      });
+    }, 10000);
+
     try {
       const { data: reportRow, error } = await supabase
         .from('disclosure_reports')
         .select('*')
         .eq('id', reportId)
-        
+        .eq('status', 'complete')
         .maybeSingle();
 
-      if (error) throw error;
-      if (!reportRow) {
-        throw new Error('Report not found');
+      clearTimeout(fetchTimeout);
+
+      if (error) {
+        console.error('[ReportView] Supabase error:', error);
+        throw error;
       }
+      
+      if (!reportRow) {
+        console.warn('[ReportView] No report found for ID:', reportId);
+        setReport(null);
+        setLoadingData(false);
+        return;
+      }
+
+      console.log('[ReportView] Report fetched successfully:', reportRow.id);
 
       let property: Property | null = null;
       if ((reportRow as any).property_id) {
@@ -69,18 +92,20 @@ const ReportView = () => {
           .maybeSingle();
         if (!propError && prop) {
           property = prop as Property;
+          console.log('[ReportView] Property data:', property);
         }
       }
 
       setReport({ ...(reportRow as any), properties: property } as any);
     } catch (error) {
-      console.error('Error fetching report:', error);
+      clearTimeout(fetchTimeout);
+      console.error('[ReportView] Error fetching report:', error);
       toast({
         title: "Error",
-        description: "Failed to load report",
+        description: "Failed to load report. Please check your connection and try again.",
         variant: "destructive",
       });
-      
+      setReport(null);
     } finally {
       setLoadingData(false);
     }
@@ -173,23 +198,27 @@ const ReportView = () => {
 
   if (loadingData) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <p className="text-sm text-muted-foreground">Loading report...</p>
       </div>
     );
   }
 
   if (!report) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6 text-center">
-            <p className="text-muted-foreground">Report not found</p>
-            <Button onClick={() => navigate('/dashboard')} className="mt-4">
-              Return to Dashboard
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="max-w-md text-center space-y-4">
+          <AlertTriangle className="w-12 h-12 text-muted-foreground mx-auto" />
+          <h2 className="text-xl font-semibold">Report Not Found</h2>
+          <p className="text-sm text-muted-foreground">
+            This report doesn't exist, hasn't been completed yet, or you don't have permission to view it.
+          </p>
+          <Button onClick={() => navigate('/')} variant="outline">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Go Home
+          </Button>
+        </div>
       </div>
     );
   }
